@@ -2,12 +2,14 @@ module mycpu_top(
     input  wire        clk,
     input  wire        resetn,
     // inst sram interface
-    output wire        inst_sram_we,
+    output wire        inst_sram_en,
+    output wire [ 3:0] inst_sram_we,
     output wire [31:0] inst_sram_addr,
     output wire [31:0] inst_sram_wdata,
     input  wire [31:0] inst_sram_rdata,
     // data sram interface
-    output wire        data_sram_we,
+    output wire        data_sram_en,
+    output wire [ 3:0] data_sram_we,
     output wire [31:0] data_sram_addr,
     output wire [31:0] data_sram_wdata,
     input  wire [31:0] data_sram_rdata,
@@ -20,15 +22,6 @@ module mycpu_top(
 reg         reset;
 always @(posedge clk) reset <= ~resetn;
 
-reg         valid;
-always @(posedge clk) begin
-    if (reset) begin
-        valid <= 1'b0;
-    end
-    else begin
-        valid <= 1'b1;
-    end
-end
 
 wire [31:0] seq_pc;
 wire [31:0] nextpc;
@@ -112,9 +105,52 @@ wire [31:0] alu_result ;
 
 wire [31:0] mem_result;
 
+reg [ 5:0]   valid;
+reg [1:0] block;
+always @(posedge clk) begin
+    if(reset) block <= 2'b0;
+    else if(~block[0] && ~block[1] && br_taken)
+        block[0] <= 1'b1;
+    else begin
+        block[0] <= 1'b0;
+        block[1] <= block[0];
+    end
+end
+always @(posedge clk) begin
+    if (reset) begin
+        valid <= 6'b0;
+    end
+    else begin
+        valid[5] <= 1'b1;
+        valid[4] <= valid[5];
+        valid[3] <= valid[4];
+        valid[2] <= valid[3];
+        valid[1] <= valid[2];
+        valid[0] <= valid[1];
+    end
+end
+wire [ 5:0]ready_go = valid & {2'b11, ~|block, 3'b111};
+wire [ 5:0]allow_in = 6'b111111;
+
+
+assign inst_sram_en = 1'b1;
+assign data_sram_en = 1'b1;
+
 assign seq_pc       = pc + 3'h4;
 assign nextpc       = br_taken ? br_target : seq_pc;
-
+reg [31:0] last_pc;
+reg [31:0] ID_pc;
+reg [31:0] EXE_pc;
+reg [31:0] MEM_pc;
+reg [31:0] WB_pc;
+always @(posedge clk) begin
+    if(reset) begin
+        last_pc <= 32'h1bfffffc;
+    end
+    else begin
+        last_pc <= pc;
+    end
+end
 always @(posedge clk) begin
     if (reset) begin
         pc <= 32'h1bfffffc;     //trick: to make nextpc be 0x1c000000 during reset 
@@ -124,24 +160,32 @@ always @(posedge clk) begin
     end
 end
 
-assign inst_sram_we    = 1'b0;
+assign inst_sram_we    = 4'b0;
 assign inst_sram_addr  = pc;
 assign inst_sram_wdata = 32'b0;
 assign inst            = inst_sram_rdata;
 
-assign op_31_26  = inst[31:26];
-assign op_25_22  = inst[25:22];
-assign op_21_20  = inst[21:20];
-assign op_19_15  = inst[19:15];
+reg [31:0] ID_inst;
+always @(posedge clk) begin
+    if(reset)
+        ID_inst <= 32'b0;
+    else if(ready_go[4] && allow_in[3])
+        ID_inst <= inst;
+end
 
-assign rd   = inst[ 4: 0];
-assign rj   = inst[ 9: 5];
-assign rk   = inst[14:10];
+assign op_31_26  = ID_inst[31:26];
+assign op_25_22  = ID_inst[25:22];
+assign op_21_20  = ID_inst[21:20];
+assign op_19_15  = ID_inst[19:15];
 
-assign i12  = inst[21:10];
-assign i20  = inst[24: 5];
-assign i16  = inst[25:10];
-assign i26  = {inst[ 9: 0], inst[25:10]};
+assign rd   = ID_inst[ 4: 0];
+assign rj   = ID_inst[ 9: 5];
+assign rk   = ID_inst[14:10];
+
+assign i12  = ID_inst[21:10];
+assign i20  = ID_inst[24: 5];
+assign i16  = ID_inst[25:10];
+assign i26  = {ID_inst[ 9: 0], ID_inst[25:10]};
 
 decoder_6_64 u_dec0(.in(op_31_26 ), .out(op_31_26_d ));
 decoder_4_16 u_dec1(.in(op_25_22 ), .out(op_25_22_d ));
@@ -167,7 +211,7 @@ assign inst_b      = op_31_26_d[6'h14];
 assign inst_bl     = op_31_26_d[6'h15];
 assign inst_beq    = op_31_26_d[6'h16];
 assign inst_bne    = op_31_26_d[6'h17];
-assign inst_lu12i_w= op_31_26_d[6'h05] & ~inst[25];
+assign inst_lu12i_w= op_31_26_d[6'h05] & ~ID_inst[25];
 
 assign alu_op[ 0] = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
                     | inst_jirl | inst_bl;
@@ -215,7 +259,7 @@ assign src2_is_imm   = inst_slli_w |
 
 assign res_from_mem  = inst_ld_w;
 assign dst_is_r1     = inst_bl;
-assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b;
+assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b & valid[3];
 assign mem_we        = inst_st_w;
 assign dest          = dst_is_r1 ? 5'd1 : rd;
 
@@ -242,34 +286,141 @@ assign br_taken = (   inst_beq  &&  rj_eq_rd
                    || inst_bl
                    || inst_b
                   ) && valid;
-assign br_target = (inst_beq || inst_bne || inst_bl || inst_b) ? (pc + br_offs) :
+assign br_target = (inst_beq || inst_bne || inst_bl || inst_b) ? (ID_pc/*pc*/ + br_offs) :
                                                    /*inst_jirl*/ (rj_value + jirl_offs);
 
-assign alu_src1 = src1_is_pc  ? pc[31:0] : rj_value;
+assign alu_src1 = src1_is_pc  ? ID_pc[31:0] : rj_value;
 assign alu_src2 = src2_is_imm ? imm : rkd_value;
-
+// ID to EXE
+reg [31:0] EXE_alu_src1;
+reg [31:0] EXE_alu_src2;
+reg [11:0] EXE_alu_op;
+always @(posedge clk) begin
+    if(reset)
+        EXE_alu_src1 <= 32'b0;
+    else if(ready_go[3] && allow_in[2])
+        EXE_alu_src1 <= alu_src1;
+    else if(~ready_go[3] && allow_in[2])
+        EXE_alu_src1 <= 32'b0;//清理机制
+end
+always @(posedge clk) begin
+    if(reset || ~ready_go[3] && allow_in[2])
+        EXE_alu_src2 <= 32'b0;
+    else if(ready_go[3] && allow_in[2])
+        EXE_alu_src2 <= alu_src2;
+end
+always @(posedge clk) begin
+    if(reset || ~ready_go[3] && allow_in[2])
+        EXE_alu_op <= 12'b0;
+    else if(ready_go[3] && allow_in[2])
+        EXE_alu_op <= alu_op;
+end
 alu u_alu(
-    .alu_op     (alu_op    ),
-    .alu_src1   (alu_src1  ),
-    .alu_src2   (alu_src2  ),
+    .alu_op     (EXE_alu_op    ),
+    .alu_src1   (EXE_alu_src1  ),
+    .alu_src2   (EXE_alu_src2  ),
     .alu_result (alu_result)
     );
-
-assign data_sram_we    = mem_we && valid;
+reg [3:0] EXE_data_sram_we;
+always @(posedge clk) begin
+    if(reset || ~ready_go[3] && allow_in[2])
+        EXE_data_sram_we <= 4'b0;
+    else if(ready_go[3] && allow_in[2])
+        EXE_data_sram_we <= {4{mem_we}};
+end
+reg [31:0] EXE_rkd_value;
+always @(posedge clk) begin
+    if(reset || ~ready_go[3] && allow_in[2]) EXE_rkd_value <= 32'b0;
+    else if(ready_go[3] && allow_in[2]) EXE_rkd_value <= rkd_value;
+end
+assign data_sram_we    = /*{4{mem_we && valid}}*/ EXE_data_sram_we;
 assign data_sram_addr  = alu_result;
-assign data_sram_wdata = rkd_value;
+assign data_sram_wdata = EXE_rkd_value;
+// EXE to MEM
+reg EXE_res_from_mem;
+always @(posedge clk) begin
+    if(reset || ~ready_go[3] && allow_in[2]) EXE_res_from_mem <= 1'b0;
+    else if(ready_go[3] && allow_in[2]) EXE_res_from_mem <= res_from_mem;
+end
+reg MEM_res_from_mem;
+always @(posedge clk) begin
+    if(reset) MEM_res_from_mem <= 1'b0;
+    else if(ready_go[2] && allow_in[1]) MEM_res_from_mem <= EXE_res_from_mem;
+end
 
-assign mem_result   = data_sram_rdata;
-wire [31:0] final_result = res_from_mem ? mem_result : alu_result;
+reg [31:0] MEM_alu_result;
+always @(posedge clk) begin
+    if(reset) MEM_alu_result <= 32'b0;
+    else if(ready_go[2] && allow_in[1]) MEM_alu_result <= alu_result;
+end
+//reg [31:0] MEM_mem_result;
+//always @(posedge clk) begin
+//    if(reset) MEM_mem_result <= 32'b0;
+//    else if(ready_go[2] && allow_in[1]) MEM_mem_result <= data_sram_rdata;
+//end
+assign mem_result   = data_sram_rdata/*MEM_mem_result*/;
+wire [31:0] final_result = MEM_res_from_mem ? mem_result : MEM_alu_result;
+// MEM to WB
+reg EXE_gr_we;
+always @(posedge clk) begin
+    if(reset || ~ready_go[3] && allow_in[2]) EXE_gr_we <= 1'b0;
+    else if(ready_go[3] && allow_in[2]) EXE_gr_we <= gr_we;
+end
+reg MEM_gr_we;
+always @(posedge clk) begin
+    if(reset) MEM_gr_we <= 1'b0;
+    else if(ready_go[2] && allow_in[1]) MEM_gr_we <= EXE_gr_we;
+end
+reg WB_gr_we;
+always @(posedge clk) begin
+    if(reset) WB_gr_we <= 1'b0;
+    else if(ready_go[1] && allow_in[0]) WB_gr_we <= MEM_gr_we;
+end
+reg [31:0] WB_final_result;
+always @(posedge clk) begin
+    if(reset) WB_final_result <= 32'b0;
+    else if(ready_go[1] && allow_in[0]) WB_final_result <= final_result;
+end
+reg [4:0] EXE_dest;
+reg [4:0] MEM_dest;
+reg [4:0] WB_dest;
+always @(posedge clk) begin
+    if(reset || ~ready_go[3] && allow_in[2]) EXE_dest <= 5'b0;
+    else if(ready_go[3] && allow_in[2]) EXE_dest <= dest;
+end
+always @(posedge clk) begin
+    if(reset) MEM_dest <= 5'b0;
+    else if(ready_go[2] && allow_in[1]) MEM_dest <= EXE_dest;
+end
+always @(posedge clk) begin
+    if(reset) WB_dest <= 5'b0;
+    else if(ready_go[1] && allow_in[0]) WB_dest <= MEM_dest;
+end
 
-assign rf_we    = gr_we && valid;
-assign rf_waddr = dest;
-assign rf_wdata = final_result;
+assign rf_we    = WB_gr_we/* && valid*/;
+assign rf_waddr = WB_dest;
+assign rf_wdata = WB_final_result;
 
+always @(posedge clk) begin
+    if(reset) ID_pc <= 32'b0;
+    else if(ready_go[4] && allow_in[3]) ID_pc <= last_pc;
+end
+always @(posedge clk) begin
+    if(reset || ~ready_go[3] && allow_in[2]) EXE_pc <= 32'b0;
+    else if(ready_go[3] && allow_in[2]) EXE_pc <= ID_pc;
+end
+always @(posedge clk) begin
+    if(reset) MEM_pc <= 32'b0;
+    else if(ready_go[2] && allow_in[1]) MEM_pc <= EXE_pc;
+end
+always @(posedge clk) begin
+    if(reset) WB_pc <= 32'b0;
+    else if(ready_go[1] && allow_in[0]) WB_pc <= MEM_pc;
+end
 // debug info generate
-assign debug_wb_pc       = pc;
+assign debug_wb_pc       = WB_pc;
 assign debug_wb_rf_we   = {4{rf_we}};
-assign debug_wb_rf_wnum  = dest;
-assign debug_wb_rf_wdata = final_result;
+assign debug_wb_rf_wnum  = WB_dest;
+assign debug_wb_rf_wdata = WB_final_result;
 
 endmodule
