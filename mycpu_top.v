@@ -116,6 +116,13 @@ wire [31:0] mem_result;
 //写后读阻塞相关变量声明
 reg  [31:0]RAWreg;
 wire RAWblock;
+//写后读前递相关变量声明
+wire [2:0] checkequ1;
+wire [2:0] checkequ2;
+wire isforward1;
+wire [31:0]forwarddata1;
+wire isforward2;
+wire [31:0]forwarddata2;
 
 reg [ 5:0]   valid;
 reg block;
@@ -300,9 +307,9 @@ regfile u_regfile(
     .waddr  (rf_waddr ),
     .wdata  (rf_wdata )
     );
-
-assign rj_value  = rf_rdata1;
-assign rkd_value = rf_rdata2;
+    
+assign rj_value  = isforward1 ? forwarddata1 : rf_rdata1;
+assign rkd_value = isforward2 ? forwarddata2 : rf_rdata2;
 
 assign rj_eq_rd = (rj_value == rkd_value);
 assign br_taken = (   inst_beq  &&  rj_eq_rd
@@ -449,52 +456,67 @@ assign debug_wb_rf_we   = {4{rf_we}};
 assign debug_wb_rf_wnum  = WB_dest;
 assign debug_wb_rf_wdata = WB_final_result;
 //写后读处理逻辑
-wire isequalwrite = gr_we && dest && rf_we && (dest == WB_dest) && ready_go[3] && allow_in[2];//是否同时完成一个写和同时开始一个写
-reg [2:0] cnt[31:0];
-wire RAWreg1condition = gr_we && dest && ready_go[3] && allow_in[2] && (RAWreg[dest] == 0);
-wire RAWreg0condition = rf_we && WB_dest && (cnt[WB_dest] == 0);
-always @(posedge clk) begin
-    if(reset)
-        RAWreg <= 32'b0;
-    else if(isequalwrite) ;
-    else if(RAWreg1condition && RAWreg0condition)begin
-        RAWreg[dest] <= 1'b1;       // ID置一
-        RAWreg[WB_dest] <= 1'b0;    //WB置零
-    end
-    else if(RAWreg1condition)
-        RAWreg[dest] <= 1'b1;       // ID置一
-    else if(RAWreg0condition)
-        RAWreg[WB_dest] <= 1'b0;    //WB置零
-end
-integer i;
-wire cnt1cond = gr_we && dest && ready_go[3] && allow_in[2] && (RAWreg[dest] == 1);
-wire cnt0cond = rf_we && WB_dest && (cnt[WB_dest] > 0);
-always @(posedge clk) begin
-    if(reset)begin
-        for (i = 0; i < 32; i = i + 1) begin
-          cnt[i] <= 3'b000;
-        end
-    end
-    else if(isequalwrite) ;
-    else if(cnt1cond && cnt0cond)begin
-        cnt[dest] <= cnt[dest] + 1;
-        cnt[WB_dest] <= cnt[WB_dest] - 1;
-    end
-    else if(cnt1cond) begin
-        cnt[dest] <= cnt[dest] + 1;
-    end
-    else if(cnt0cond)
-        cnt[WB_dest] <= cnt[WB_dest] - 1;
-end
-wire alwayszero = cnt[0][2] | cnt[1][2] | cnt[2][2] | cnt[3][2] |
-                      cnt[4][2] | cnt[5][2] | cnt[6][2] | cnt[7][2] |
-                      cnt[8][2] | cnt[9][2] | cnt[10][2] | cnt[11][2] |
-                      cnt[12][2] | cnt[13][2] | cnt[14][2] | cnt[15][2] |
-                      cnt[16][2] | cnt[17][2] | cnt[18][2] | cnt[19][2] |
-                      cnt[20][2] | cnt[21][2] | cnt[22][2] | cnt[23][2] |
-                      cnt[24][2] | cnt[25][2] | cnt[26][2] | cnt[27][2] |
-                      cnt[28][2] | cnt[29][2] | cnt[30][2] | cnt[31][2];
+//wire isequalwrite = gr_we && dest && rf_we && (dest == WB_dest) && ready_go[3] && allow_in[2];//是否同时完成一个写和同时开始一个写
+//reg [2:0] cnt[31:0];
+//wire RAWreg1condition = gr_we && dest && ready_go[3] && allow_in[2] && (RAWreg[dest] == 0);
+//wire RAWreg0condition = rf_we && WB_dest && (cnt[WB_dest] == 0);
+//always @(posedge clk) begin
+//    if(reset)
+//        RAWreg <= 32'b0;
+//    else if(isequalwrite) ;
+//    else if(RAWreg1condition && RAWreg0condition)begin
+//        RAWreg[dest] <= 1'b1;       // ID置一
+//        RAWreg[WB_dest] <= 1'b0;    //WB置零
+//    end
+//    else if(RAWreg1condition)
+//        RAWreg[dest] <= 1'b1;       // ID置一
+//    else if(RAWreg0condition)
+//        RAWreg[WB_dest] <= 1'b0;    //WB置零
+//end
+//integer i;
+//wire cnt1cond = gr_we && dest && ready_go[3] && allow_in[2] && (RAWreg[dest] == 1);
+//wire cnt0cond = rf_we && WB_dest && (cnt[WB_dest] > 0);
+//always @(posedge clk) begin
+//    if(reset)begin
+//        for (i = 0; i < 32; i = i + 1) begin
+//          cnt[i] <= 3'b000;
+//        end
+//    end
+//    else if(isequalwrite) ;
+//    else if(cnt1cond && cnt0cond)begin
+//        cnt[dest] <= cnt[dest] + 1;
+//        cnt[WB_dest] <= cnt[WB_dest] - 1;
+//    end
+//    else if(cnt1cond) begin
+//        cnt[dest] <= cnt[dest] + 1;
+//    end
+//    else if(cnt0cond)
+//        cnt[WB_dest] <= cnt[WB_dest] - 1;
+//end
+
+//// debug variable
+//wire alwayszero = cnt[0][2] | cnt[1][2] | cnt[2][2] | cnt[3][2] |
+//                      cnt[4][2] | cnt[5][2] | cnt[6][2] | cnt[7][2] |
+//                      cnt[8][2] | cnt[9][2] | cnt[10][2] | cnt[11][2] |
+//                      cnt[12][2] | cnt[13][2] | cnt[14][2] | cnt[15][2] |
+//                      cnt[16][2] | cnt[17][2] | cnt[18][2] | cnt[19][2] |
+//                      cnt[20][2] | cnt[21][2] | cnt[22][2] | cnt[23][2] |
+//                      cnt[24][2] | cnt[25][2] | cnt[26][2] | cnt[27][2] |
+//                      cnt[28][2] | cnt[29][2] | cnt[30][2] | cnt[31][2];
 wire inread1 = ~(inst_bl || inst_b) &&~src1_is_pc;
 wire inread2 = ~src2_is_imm | inst_st_w;
-assign RAWblock = rf_raddr1 && inread1 && RAWreg[rf_raddr1] || rf_raddr2 && inread2 && RAWreg[rf_raddr2]; 
+//assign RAWblock = rf_raddr1 && inread1 && RAWreg[rf_raddr1] || rf_raddr2 && inread2 && RAWreg[rf_raddr2]; 
+assign RAWblock = (inread1 && rf_raddr1 != 0 || inread2 && rf_raddr2 != 0) &&
+		(EXE_gr_we && EXE_res_from_mem &&(rf_raddr1 == EXE_dest || rf_raddr2 == EXE_dest));
+//forward variable
+assign checkequ1 = {WB_gr_we && WB_dest == rf_raddr1, MEM_gr_we && MEM_dest == rf_raddr1, EXE_gr_we && EXE_dest == rf_raddr1};
+assign checkequ2 = {WB_gr_we && WB_dest == rf_raddr2, MEM_gr_we && MEM_dest == rf_raddr2, EXE_gr_we && EXE_dest == rf_raddr2};
+assign isforward1 = inread1 && rf_raddr1 != 0 && |checkequ1;
+assign forwarddata1 = checkequ1[0] ? alu_result :
+				      checkequ1[1] ? final_result :
+				      checkequ1[2] ? WB_final_result : 32'b0;
+assign isforward2 = inread2 && rf_raddr2 != 0 && |checkequ2;
+assign forwarddata2 = checkequ2[0] ? alu_result :
+				      checkequ2[1] ? final_result :
+				      checkequ2[2] ? WB_final_result : 32'b0;
 endmodule
