@@ -112,6 +112,11 @@ wire [31:0] alu_src1   ;
 wire [31:0] alu_src2   ;
 wire [31:0] alu_result ;
 
+wire [1:0]  mem_offset;
+wire [3:0]  mem_offset_d;
+wire [31:0] mem_rdata_w;
+wire [15:0] mem_rdata_h;
+wire [ 7:0] mem_rdata_b;
 wire [31:0] mem_result;
 
 //--  water flow control regs
@@ -135,8 +140,10 @@ reg [31:0] final_result_WB, pc_WB;
 reg rf_we_WB;
 
 reg mem_byte_EX, mem_half_EX, mem_word_EX;
+reg mem_byte_MEM, mem_half_MEM, mem_word_MEM;
 
 reg mem_signed_EX;
+reg mem_signed_MEM;
 
 
 assign inst_sram_we    = 4'b0;
@@ -334,7 +341,14 @@ assign br_target = (inst_beq || inst_bne || inst_bl || inst_b || inst_blt || ins
 assign alu_src1 = src1_is_pc  ? pc_ID[31:0] : rj_value;
 assign alu_src2 = src2_is_imm ? imm : rkd_value;
 
-assign mem_result   = data_sram_rdata;
+assign mem_rdata_w = data_sram_rdata;
+assign mem_rdata_h = mem_offset_d[2] ? data_sram_rdata[31:16] :data_sram_rdata[15:0];
+assign mem_rdata_b = {{8{mem_offset_d[0]}} & data_sram_rdata[7:0]} | {{8{mem_offset_d[1]}} & data_sram_rdata[15:8]} |
+                    {{8{mem_offset_d[2]}} & data_sram_rdata[23:16]} | {{8{mem_offset_d[3]}} & data_sram_rdata[31:24]};
+
+assign mem_result   = mem_byte_MEM ? {{24{signed_MEM & mem_rdata_b[7]}}, mem_rdata_b[7:0]} :
+                      mem_half_MEM ? {{16{signed_MEM & mem_rdata_h[15]}}, mem_rdata_h[15:0]} :
+                    mem_rdata_w;
 
 
 //--  debug info generate
@@ -621,6 +635,11 @@ always @(posedge clk) begin
         dest_MEM <= 5'b0;
         result_all_MEM <= 32'b0;
         pc_MEM <= 32'b0;
+
+        mem_byte_MEM <= 1'b0;
+        mem_half_MEM <= 1'b0;
+        mem_word_MEM <= 1'b0;
+        mem_signed_MEM <= 1'b0;
     end
     else if(allow_in_EX)begin
         res_from_mem_MEM <= res_from_mem_EX;
@@ -628,6 +647,11 @@ always @(posedge clk) begin
         result_all_MEM <= result_all;    
         dest_MEM <= dest_EX;
         pc_MEM <= pc_EX;
+
+        mem_byte_MEM <= mem_byte_EX;
+        mem_half_MEM <= mem_half_EX;
+        mem_word_MEM <= mem_word_EX;
+        mem_signed_MEM <= mem_signed_EX;
     end
 end
 
@@ -650,8 +674,13 @@ assign ready_go_EX = if_divider ? (unsigned_dout_tvalid || signed_dout_tvalid) :
 //-- MEM stage
 
 assign data_sram_en    = (mem_we_EX||res_from_mem_EX) && valid && valid_EX && ready_go_EX; //实际上要有EX的寄存器发请求，MEM才能接受
-assign data_sram_we    = mem_we_EX? 4'b1111 : 4'b0;
-assign data_sram_addr  = alu_result;
+assign data_sram_we    = mem_we_EX? {{2{mem_word_EXE}}, mem_half_EXE | mem_word_EXE, 1'b1}  : 4'b0;
+assign data_sram_addr  = alu_result & 2'b00;
+assign mem_offset   = alu_result[1:0];
+decoder_2_4 u_dec4(
+    .in(mem_offset),
+    .out(mem_offset_d)
+);
 assign data_sram_wdata = data_sram_wdata_EX;
 wire[31:0] final_result_MEM;
 assign final_result_MEM = res_from_mem_MEM ? mem_result : result_all_MEM;
