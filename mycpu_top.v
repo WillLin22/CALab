@@ -39,7 +39,7 @@ wire [31:0] br_target;
 wire [31:0] inst;
 reg  [31:0] pc;
 
-wire [11:0] alu_op;
+wire [15:0] alu_op;
 wire        load_op;
 wire        src1_is_pc;
 wire        src2_is_imm;
@@ -122,12 +122,12 @@ reg valid_IF,valid_ID,valid_EX,valid_MEM,valid_WB;
 
 wire [31:0] pc_IF;
 reg [31:0] pc_ID;
-reg [31:0] alu_src1_EX, alu_src2_EX, data_sram_wdata_EX, pc_EX, br_target_EX;
+reg [31:0] alu_src1_EX, alu_src2_EX, rj_value_EX, rkd_value_EX, data_sram_wdata_EX, pc_EX, br_target_EX;
 reg [11:0] alu_op_EX;
 reg [4:0] dest_EX;
 reg [3:0] mem_we_EX;
 reg mem_en_EX, res_from_mem_EX, rf_we_EX, br_taken_EX;
-reg [31:0] alu_result_MEM, pc_MEM;
+reg [31:0] result_all_MEM, pc_MEM;
 reg [4:0] dest_MEM;
 reg res_from_mem_MEM,rf_we_MEM;
 reg [4:0] dest_WB;
@@ -232,7 +232,12 @@ assign alu_op[ 8] = inst_slli_w | inst_sll_w;
 assign alu_op[ 9] = inst_srli_w | inst_srl_w;
 assign alu_op[10] = inst_srai_w | inst_sra_w;
 assign alu_op[11] = inst_lu12i_w;
+assign alu_op[12] = inst_mul_w;
+assign alu_op[13] = inst_mulh_w;
+assign alu_op[14] = inst_mulh_wu;
 
+wire if_divider;        //EX流水段是否需要等待多周期除法器结束计算，即是否是除法指令
+assign if_divider = inst_div_w | inst_div_wu | inst_mod_w | inst_mod_wu;
 
 assign need_ui5   =  inst_slli_w | inst_srli_w | inst_srai_w;
 assign need_si12  =  inst_addi_w | inst_ld_w | inst_st_w| inst_st_b | inst_st_h | inst_st_w | inst_ld_b | inst_ld_bu| inst_ld_h | inst_ld_hu | inst_ld_w | inst_slti | inst_sltui;
@@ -279,7 +284,7 @@ assign src2_is_imm   = inst_slli_w |
 
 assign res_from_mem  = inst_ld_w |inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu;
 assign dst_is_r1     = inst_bl;
-assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b&~inst_st_b&~inst_st_h;
+assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b & ~inst_st_b & ~inst_st_h;
 assign mem_we        = inst_st_w|inst_st_b|inst_st_h;
 assign dest          = dst_is_r1 ? 5'd1 : rd;
 
@@ -308,8 +313,6 @@ assign br_target = (inst_beq || inst_bne || inst_bl || inst_b) ? (pc_ID + br_off
 
 assign alu_src1 = src1_is_pc  ? pc_ID[31:0] : rj_value;
 assign alu_src2 = src2_is_imm ? imm : rkd_value;
-
-
 
 assign mem_result   = data_sram_rdata;
 
@@ -455,6 +458,8 @@ always @(posedge clk) begin
         alu_src1_EX <= 32'b0;
         alu_src2_EX <= 32'b0;
         alu_op_EX   <= 12'b0;
+        rj_value_EX <= 32'b0;
+        rkd_value_EX <= 32'b0;
         dest_EX     <= 5'b0;
         data_sram_wdata_EX <= 32'b0;
         res_from_mem_EX <= 1'b0;
@@ -467,6 +472,8 @@ always @(posedge clk) begin
         alu_src1_EX <= alu_src1;
         alu_src2_EX <= alu_src2;
         alu_op_EX   <= alu_op;
+        rj_value_EX <= rj_value;
+        rkd_value_EX <= rkd_value;
         dest_EX     <= dest;
         data_sram_wdata_EX <= data_sram_wdata_ID;
         mem_we_EX   <= mem_we;
@@ -481,11 +488,11 @@ always @(posedge clk) begin
     if (reset) begin
         valid_ID <= 1'b0;
     end
-    else if(br_taken&&valid_ID&&ready_go_ID) begin //只有IF取了错指令，而且ID指令有效，而且EX准备接受，才把valid=0传下去
+    else if(br_taken && valid_ID && ready_go_ID) begin //只有IF取了错指令，而且ID指令有效，而且EX准备接受，才把valid=0传下去
         valid_ID <= 1'b0;
     end
     else if(allow_in_ID) begin
-        valid_ID <= valid_IF&&ready_go_IF;
+        valid_ID <= valid_IF && ready_go_IF;
     end
 end
 
@@ -495,22 +502,100 @@ alu u_alu(
     .alu_op     (alu_op_EX    ),
     .alu_src1   (alu_src1_EX  ),
     .alu_src2   (alu_src2_EX  ),
-    .alu_result (alu_result)
+    .alu_result (alu_result) //contain mul type insts
     );
 
+wire [31:0] divider_dividend,divider_divisor;
+wire [63:0] unsigned_divider_res,signed_divider_res;
+
+wire unsigned_dividend_tready,unsigned_dividend_tvalid,unsigned_divisor_tready,unsigned_divisor_tvalid,unsigned_dout_tvalid;
+wire signed_dividend_tready,signed_dividend_tvalid,signed_divisor_tready,signed_divisor_tvalid,signed_dout_tvalid;
+
+assign divider_dividend = rj_value_EX;
+assign divider_divisor  = rkd_value_EX;
+
+unsigned_divider u_unsigned_divider (
+    .aclk                   (clk),
+    .s_axis_dividend_tdata  (divider_dividend),
+    .s_axis_dividend_tready (unsigned_dividend_tready),
+    .s_axis_dividend_tvalid (unsigned_dividend_tvalid),
+    .s_axis_divisor_tdata   (divider_divisor),
+    .s_axis_divisor_tready  (unsigned_divisor_tready),
+    .s_axis_divisor_tvalid  (unsigned_divisor_tvalid),
+    .m_axis_dout_tdata      (unsigned_divider_res),
+    .m_axis_dout_tvalid     (unsigned_dout_tvalid)
+);
+
+signed_divider u_signed_divider (
+    .aclk                   (clk),
+    .s_axis_dividend_tdata  (divider_dividend),
+    .s_axis_dividend_tready (signed_dividend_tready),
+    .s_axis_dividend_tvalid (signed_dividend_tvalid),
+    .s_axis_divisor_tdata   (divider_divisor),
+    .s_axis_divisor_tready  (signed_divisor_tready),
+    .s_axis_divisor_tvalid  (signed_divisor_tvalid),
+    .m_axis_dout_tdata      (signed_divider_res),
+    .m_axis_dout_tvalid     (signed_dout_tvalid)
+);
+
+reg signed_dividend_tvalid_reg, signed_divisor_tvalid_reg;
+reg unsigned_dividend_tvalid_reg, unsigned_divisor_tvalid_reg;
+
+always@(posedge clk) begin
+    if(reset) begin
+        unsigned_dividend_tvalid_reg <= 1'b0;
+        unsigned_divisor_tvalid_reg <= 1'b0;
+    end
+    else if (unsigned_dividend_tready && unsigned_divisor_tready) begin //如果实际运行的时候发现dividend_tready和divisor_tready不一定是同时拉高，可能需要把两个always块拆成四个
+        unsigned_dividend_tvalid_reg <= 1'b0;
+        unsigned_divisor_tvalid_reg <= 1'b0;
+    end
+    else if (allow_in_EX && (inst_div_wu | inst_mod_wu)) begin
+        unsigned_dividend_tvalid_reg <= 1'b1;
+        unsigned_divisor_tvalid_reg <= 1'b1;
+    end
+end
+
+always@(posedge clk) begin
+    if(reset) begin
+        signed_dividend_tvalid_reg <= 1'b0;
+        signed_divisor_tvalid_reg <= 1'b0;
+    end
+    else if (signed_dividend_tready && signed_divisor_tready) begin
+        signed_dividend_tvalid_reg <= 1'b0;
+        signed_divisor_tvalid_reg <= 1'b0;
+    end
+    else if (allow_in_EX && (inst_div_w | inst_mod_w)) begin
+        signed_dividend_tvalid_reg <= 1'b1;
+        signed_divisor_tvalid_reg <= 1'b1;
+    end
+end
+
+assign unsigned_dividend_tvalid = unsigned_dividend_tvalid_reg;
+assign unsigned_divisor_tvalid = unsigned_divisor_tvalid_reg;
+assign signed_dividend_tvalid = signed_dividend_tvalid_reg;
+assign signed_divisor_tvalid = signed_divisor_tvalid_reg;
+
+wire [31:0] div_result;
+assign div_result = (inst_div_wu) ? unsigned_divider_res[63:32] : 
+                    (inst_div_w)  ? signed_divider_res[63:32] : 
+                    (inst_mod_wu) ? unsigned_divider_res[31:0] : signed_divider_res[31:0];
+
+wire[31:0] result_all;
+assign result_all = if_divider ? div_result : alu_result;
 
 always @(posedge clk) begin
     if (reset) begin
         res_from_mem_MEM <= 1'b0;
         rf_we_MEM <= 1'b0;
         dest_MEM <= 5'b0;
-        alu_result_MEM <= 32'b0;
+        result_all_MEM <= 32'b0;
         pc_MEM <= 32'b0;
     end
     else if(allow_in_EX)begin
         res_from_mem_MEM <= res_from_mem_EX;
         rf_we_MEM <= rf_we_EX;
-        alu_result_MEM <= alu_result;    
+        result_all_MEM <= result_all;    
         dest_MEM <= dest_EX;
         pc_MEM <= pc_EX;
     end
@@ -518,27 +603,28 @@ end
 
 assign result_forward[0] = alu_result;
 //!计算的结果是内存地址，不需要前递
-assign dest_forward[0] = dest_EX&{5{~res_from_mem_EX&rf_we_EX&valid_EX}};//If the result will WB, then forward.
+assign dest_forward[0] = dest_EX & {5{~res_from_mem_EX & rf_we_EX & valid_EX}};//If the result will WB, then forward.
 
 always @(posedge clk) begin
     if (reset) begin
         valid_EX <= 1'b0;
     end
     else if(allow_in_EX) begin
-        valid_EX <= valid_ID&&ready_go_ID;
+        valid_EX <= valid_ID && ready_go_ID;
     end
 end
 
-assign ready_go_EX = 1'b1;
+assign ready_go_EX = if_divider ? (signed_out_tvalid || unsigned_out_tvalid) : 1'b1;
+
 
 //-- MEM stage
 
-assign data_sram_en    = (mem_we_EX||res_from_mem_EX) && valid && valid_EX;//实际上要有EX的寄存器发请求，MEM才能接受
+assign data_sram_en    = (mem_we_EX||res_from_mem_EX) && valid && valid_EX; //实际上要有EX的寄存器发请求，MEM才能接受
 assign data_sram_we    = mem_we_EX? 4'b1111 : 4'b0;
 assign data_sram_addr  = alu_result;
 assign data_sram_wdata = data_sram_wdata_EX;
 wire[31:0] final_result_MEM;
-assign final_result_MEM = res_from_mem_MEM ? mem_result : alu_result_MEM;
+assign final_result_MEM = res_from_mem_MEM ? mem_result : result_all_MEM;
 
 always @(posedge clk) begin
     if (reset) begin
@@ -548,7 +634,7 @@ always @(posedge clk) begin
         rf_we_WB <= 1'b0;
     end
     else if(allow_in_MEM) begin
-        final_result_WB <=final_result_MEM;
+        final_result_WB <= final_result_MEM;
         pc_WB <= pc_MEM;
         dest_WB <= dest_MEM;
         rf_we_WB <= rf_we_MEM;
@@ -556,14 +642,14 @@ always @(posedge clk) begin
 end
 
 assign result_forward[1] = final_result_MEM;
-assign dest_forward[1] = dest_MEM&{5{rf_we_MEM&valid_MEM}};
+assign dest_forward[1] = dest_MEM & {5{rf_we_MEM & valid_MEM}};
 
 always @(posedge clk) begin
     if (reset) begin
         valid_MEM <= 1'b0;
     end
     else if(allow_in_MEM) begin
-        valid_MEM <= valid_EX&&ready_go_EX;
+        valid_MEM <= valid_EX && ready_go_EX;
     end
 end
 
@@ -571,7 +657,7 @@ assign ready_go_MEM = 1'b1;
 
 //-- WB stage
 
-assign rf_we    = rf_we_WB&&valid_WB;
+assign rf_we    = rf_we_WB && valid_WB;
 assign rf_waddr = dest_WB;
 assign rf_wdata = final_result_WB;
 regfile u_regfile(
@@ -590,12 +676,12 @@ always @(posedge clk) begin
         valid_WB <= 1'b0;
     end
     else if(allow_in_WB) begin
-        valid_WB <= valid_MEM&&ready_go_MEM;
+        valid_WB <= valid_MEM && ready_go_MEM;
     end
 end
 
 assign result_forward[2] = final_result_WB;
-assign dest_forward[2] = dest_WB&{5{rf_we_WB&valid_WB}};
+assign dest_forward[2] = dest_WB & {5{rf_we_WB & valid_WB}};
 
 assign ready_go_WB = 1'b1;
 
