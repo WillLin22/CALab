@@ -614,7 +614,7 @@ always @(posedge clk) begin
     end
 end
 
-assign ready_go_EX = if_divider ? (signed_out_tvalid || unsigned_out_tvalid) : 1'b1;
+assign ready_go_EX = if_divider ? (unsigned_dout_tvalid || signed_dout_tvalid) : 1'b1;
 
 
 //-- MEM stage
