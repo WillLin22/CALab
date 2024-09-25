@@ -297,6 +297,15 @@ assign dest          = dst_is_r1 ? 5'd1 : rd;
 
 wire [31:0] data_sram_wdata_ID;
 assign data_sram_wdata_ID = rkd_value;
+
+//* Mem instrs
+wire mem_byte, mem_half, mem_word, mem_signed;
+assign mem_byte = inst_ld_b | inst_st_b | inst_ld_bu;
+assign mem_half = inst_ld_h | inst_st_h | inst_ld_hu;
+assign mem_word = inst_ld_w | inst_st_w;
+assign mem_signed = inst_ld_b | inst_ld_h | inst_ld_w;
+
+
 //* reg read replace for forward
 
 assign rf_raddr1 = rj;
@@ -497,6 +506,11 @@ always @(posedge clk) begin
         res_from_mem_EX <= res_from_mem;
         rf_we_EX    <= gr_we & valid;
         pc_EX <= pc_ID;
+
+        mem_byte_EX <= mem_byte;
+        mem_half_EX <= mem_half;
+        mem_word_EX <= mem_word;
+        mem_signed_EX <= mem_signed;
     end
 end
 
