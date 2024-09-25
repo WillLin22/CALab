@@ -180,11 +180,14 @@ assign inst_bne    = op_31_26_d[6'h17];
 assign inst_lu12i_w= op_31_26_d[6'h05] & ~inst[25];
 
 //--  new instr
-wire inst_slti, inst_sltui, inst_addi_w, inst_andi, inst_ori, inst_xori, inst_sll_w, inst_srl_w, inst_sra_w, inst_pcaddu12i, inst_mul_w, inst_mulh_w, inst_mulh_wu, inst_div_w, inst_mod_w, inst_div_wu, inst_mod_wu, inst_blt, inst_bge, inst_bltu, inst_bgeu, inst_ld_b, inst_ld_h, inst_ld_bu, inst_ld_hu, inst_st_b, inst_st_h;
+wire inst_slti, inst_sltui, inst_andi, inst_ori,
+     inst_xori, inst_sll_w, inst_srl_w, inst_sra_w, inst_pcaddu12i,
+     inst_mul_w, inst_mulh_w, inst_mulh_wu, inst_div_w, inst_mod_w,
+     inst_div_wu, inst_mod_wu, inst_blt, inst_bge, inst_bltu, inst_bgeu,
+     inst_ld_b, inst_ld_h, inst_ld_bu, inst_ld_hu, inst_st_b, inst_st_h;
 
 assign inst_slti   = op_31_26_d[6'h00] & op_25_22_d[4'h8];
 assign inst_sltui  = op_31_26_d[6'h00] & op_25_22_d[4'h9];
-assign inst_addi_w = op_31_26_d[6'h00] & op_25_22_d[4'ha];
 assign inst_andi   = op_31_26_d[6'h00] & op_25_22_d[4'hd];
 assign inst_ori    = op_31_26_d[6'h00] & op_25_22_d[4'he];
 assign inst_xori   = op_31_26_d[6'h00] & op_25_22_d[4'hf];
@@ -252,8 +255,8 @@ assign need_ui12 =  inst_andi | inst_ori | inst_xori;
 
 assign imm = src2_is_4 ? 32'h4                      :
              need_si20 ? {i20[19:0], 12'b0}         :
-need_ui5 || need_si12  ?{{20{i12[11]}}, i12[11:0]}  :
-/*need_ui12*/{{20'b0}, i12[11:0]};
+            need_ui5 || need_si12  ?{{20{i12[11]}}, i12[11:0]}  :
+            /*need_ui12*/{{20'b0}, i12[11:0]};
 
 assign br_offs = need_si26 ? {{ 4{i26[25]}}, i26[25:0], 2'b0} :
                              {{14{i16[15]}}, i16[15:0], 2'b0} ;
@@ -603,7 +606,7 @@ end
 
 assign result_forward[0] = alu_result;
 //!计算的结果是内存地址，不需要前递
-assign dest_forward[0] = dest_EX & {5{~res_from_mem_EX & rf_we_EX & valid_EX}};//If the result will WB, then forward.
+assign dest_forward[0] = dest_EX & {5{~res_from_mem_EX & rf_we_EX & valid_EX & ready_go_EX}};//If the result will WB, then forward.
 
 always @(posedge clk) begin
     if (reset) begin
@@ -619,7 +622,7 @@ assign ready_go_EX = if_divider ? (unsigned_dout_tvalid || signed_dout_tvalid) :
 
 //-- MEM stage
 
-assign data_sram_en    = (mem_we_EX||res_from_mem_EX) && valid && valid_EX; //实际上要有EX的寄存器发请求，MEM才能接受
+assign data_sram_en    = (mem_we_EX||res_from_mem_EX) && valid && valid_EX && ready_go_EX; //实际上要有EX的寄存器发请求，MEM才能接受
 assign data_sram_we    = mem_we_EX? 4'b1111 : 4'b0;
 assign data_sram_addr  = alu_result;
 assign data_sram_wdata = data_sram_wdata_EX;
@@ -642,7 +645,7 @@ always @(posedge clk) begin
 end
 
 assign result_forward[1] = final_result_MEM;
-assign dest_forward[1] = dest_MEM & {5{rf_we_MEM & valid_MEM}};
+assign dest_forward[1] = dest_MEM & {5{rf_we_MEM & valid_MEM & ready_go_MEM}};
 
 always @(posedge clk) begin
     if (reset) begin
@@ -681,7 +684,7 @@ always @(posedge clk) begin
 end
 
 assign result_forward[2] = final_result_WB;
-assign dest_forward[2] = dest_WB & {5{rf_we_WB & valid_WB}};
+assign dest_forward[2] = dest_WB & {5{rf_we_WB & valid_WB & ready_go_WB}};
 
 assign ready_go_WB = 1'b1;
 
