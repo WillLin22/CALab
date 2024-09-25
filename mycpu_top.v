@@ -675,7 +675,7 @@ assign ready_go_EX = if_divider ? (unsigned_dout_tvalid || signed_dout_tvalid) :
 
 assign data_sram_en    = (mem_we_EX||res_from_mem_EX) && valid && valid_EX && ready_go_EX; //实际上要有EX的寄存器发请求，MEM才能接受
 assign data_sram_we    = mem_we_EX? {{2{mem_word_EXE}}, mem_half_EXE | mem_word_EXE, 1'b1}  : 4'b0;
-assign data_sram_addr  = alu_result & 2'b00;
+assign data_sram_addr  = {alu_result[31:2], 2'b00};
 assign mem_offset   = alu_result[1:0];
 decoder_2_4 u_dec4(
     .in(mem_offset),
