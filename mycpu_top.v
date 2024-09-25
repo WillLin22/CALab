@@ -180,18 +180,17 @@ assign inst_bne    = op_31_26_d[6'h17];
 assign inst_lu12i_w= op_31_26_d[6'h05] & ~inst[25];
 
 //--  new instr
-wire inst_slti, inst_sltui, inst_addi_w, inst_andi, inst_ori, inst_xori, inst_sll_w, inst_srl_w, inst_sra_w, inst_pcaddu12i, inst_mul_w, inst_mulh_w, inst_mulh_wu, inst_div_w, inst_mod_w, inst_div_wu, inst_mod_wu, inst_blt, inst_bge, inst_bltu, inst_bgeu, inst_ld_b, inst_ld_h, inst_ld_bu, inst_ld_hu, inst_st_b, inst_st_h;
+wire inst_slti, inst_sltui, inst_andi, inst_ori, inst_xori, inst_sll_w, inst_srl_w, inst_sra_w, inst_pcaddu12i, inst_mul_w, inst_mulh_w, inst_mulh_wu, inst_div_w, inst_mod_w, inst_div_wu, inst_mod_wu, inst_blt, inst_bge, inst_bltu, inst_bgeu, inst_ld_b, inst_ld_h, inst_ld_bu, inst_ld_hu, inst_st_b, inst_st_h;
 
 assign inst_slti   = op_31_26_d[6'h00] & op_25_22_d[4'h8];
 assign inst_sltui  = op_31_26_d[6'h00] & op_25_22_d[4'h9];
-assign inst_addi_w = op_31_26_d[6'h00] & op_25_22_d[4'ha];
 assign inst_andi   = op_31_26_d[6'h00] & op_25_22_d[4'hd];
 assign inst_ori    = op_31_26_d[6'h00] & op_25_22_d[4'he];
 assign inst_xori   = op_31_26_d[6'h00] & op_25_22_d[4'hf];
 assign inst_sll_w  = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h0e];
 assign inst_srl_w  = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h0f];
 assign inst_sra_w  = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h10];
-assign inst_pcaddu12i = op_31_26_d[6'h0e];
+assign inst_pcaddu12i = op_31_26_d[6'h07] & ~inst[25];
 
 assign inst_mul_w  = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h18];
 assign inst_mulh_w = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h19];
@@ -304,12 +303,16 @@ assign rkd_value = rf_rd2_is_forward?rf_rdata2_forward: rf_rdata2;
 assign rj_eq_rd = (rj_value == rkd_value);
 assign br_taken = (   inst_beq  &&  rj_eq_rd
                    || inst_bne  && !rj_eq_rd
+                   || inst_blt  &&  rj_value < rkd_value
+                   || inst_bge  &&  rj_value >= rkd_value
+                   || inst_bltu &&  $unsigned(rj_value) < $unsigned(rkd_value)
+                   || inst_bgeu &&  $unsigned(rj_value) >= $unsigned(rkd_value)
                    || inst_jirl
                    || inst_bl
                    || inst_b
                   ) && valid;
-assign br_target = (inst_beq || inst_bne || inst_bl || inst_b) ? (pc_ID + br_offs) :
-                                                   /*inst_jirl*/ (rj_value + jirl_offs);
+assign br_target = (inst_beq || inst_bne || inst_bl || inst_b || inst_blt || inst_bge || inst_bltu || inst_bgeu) ? (pc_ID + br_offs) :
+                                                /*inst_jirl*/(rj_value + jirl_offs) ;
 
 assign alu_src1 = src1_is_pc  ? pc_ID[31:0] : rj_value;
 assign alu_src2 = src2_is_imm ? imm : rkd_value;
