@@ -134,6 +134,10 @@ reg [4:0] dest_WB;
 reg [31:0] final_result_WB, pc_WB;
 reg rf_we_WB;
 
+reg mem_byte_EX, mem_half_EX, mem_word_EX;
+
+reg mem_signed_EX;
+
 
 assign inst_sram_we    = 4'b0;
 assign inst_sram_wdata = 32'b0;
@@ -474,6 +478,11 @@ always @(posedge clk) begin
         mem_we_EX   <= 4'b0;
         mem_en_EX   <= 1'b0;
         pc_EX       <= 32'b0;
+
+        mem_byte_EX <= 1'b0;
+        mem_half_EX <= 1'b0;
+        mem_word_EX <= 1'b0;
+        mem_signed_EX <= 1'b0;
     end
     else if(allow_in_ID)begin
         alu_src1_EX <= alu_src1;
