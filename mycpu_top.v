@@ -39,7 +39,7 @@ wire [31:0] br_target;
 wire [31:0] inst;
 reg  [31:0] pc;
 
-wire [15:0] alu_op;
+wire [14:0] alu_op;
 wire        load_op;
 wire        src1_is_pc;
 wire        src2_is_imm;
@@ -128,7 +128,7 @@ reg valid_IF,valid_ID,valid_EX,valid_MEM,valid_WB;
 wire [31:0] pc_IF;
 reg [31:0] pc_ID;
 reg [31:0] alu_src1_EX, alu_src2_EX, rj_value_EX, rkd_value_EX, data_sram_wdata_EX, pc_EX, br_target_EX;
-reg [11:0] alu_op_EX;
+reg [14:0] alu_op_EX;
 reg [4:0] dest_EX;
 reg [3:0] mem_we_EX;
 reg mem_en_EX, res_from_mem_EX, rf_we_EX, br_taken_EX;
@@ -346,8 +346,8 @@ assign mem_rdata_h = mem_offset_d[2] ? data_sram_rdata[31:16] :data_sram_rdata[1
 assign mem_rdata_b = {{8{mem_offset_d[0]}} & data_sram_rdata[7:0]} | {{8{mem_offset_d[1]}} & data_sram_rdata[15:8]} |
                     {{8{mem_offset_d[2]}} & data_sram_rdata[23:16]} | {{8{mem_offset_d[3]}} & data_sram_rdata[31:24]};
 
-assign mem_result   = mem_byte_MEM ? {{24{signed_MEM & mem_rdata_b[7]}}, mem_rdata_b[7:0]} :
-                      mem_half_MEM ? {{16{signed_MEM & mem_rdata_h[15]}}, mem_rdata_h[15:0]} :
+assign mem_result   = mem_byte_MEM ? {{24{mem_signed_MEM & mem_rdata_b[7]}}, mem_rdata_b[7:0]} :
+                      mem_half_MEM ? {{16{mem_signed_MEM & mem_rdata_h[15]}}, mem_rdata_h[15:0]} :
                     mem_rdata_w;
 
 
