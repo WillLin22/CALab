@@ -112,7 +112,6 @@ wire [31:0] alu_src1   ;
 wire [31:0] alu_src2   ;
 wire [31:0] alu_result ;
 
-wire [1:0]  mem_offset;
 wire [3:0]  mem_offset_d;
 wire [31:0] mem_rdata_w;
 wire [15:0] mem_rdata_h;
@@ -146,6 +145,8 @@ reg mem_byte_MEM, mem_half_MEM, mem_word_MEM;
 
 reg mem_signed_EX;
 reg mem_signed_MEM;
+
+reg[1:0] mem_offset_MEM;
 
 reg inst_div_w_EX, inst_div_wu_EX, inst_mod_w_EX, inst_mod_wu_EX;
 
@@ -301,7 +302,7 @@ assign src2_is_imm   = inst_slli_w |
 
 assign res_from_mem  = inst_ld_w |inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu;
 assign dst_is_r1     = inst_bl;
-assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b & ~inst_st_b & ~inst_st_h;
+assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b & ~inst_st_b & ~inst_st_h & ~inst_bge & ~inst_bgeu & ~inst_blt & ~inst_bltu;
 assign mem_we        = inst_st_w|inst_st_b|inst_st_h;
 assign dest          = dst_is_r1 ? 5'd1 : rd;
 
@@ -330,8 +331,8 @@ assign rkd_value = rf_rd2_is_forward?rf_rdata2_forward: rf_rdata2;
 assign rj_eq_rd = (rj_value == rkd_value);
 assign br_taken = (   inst_beq  &&  rj_eq_rd
                    || inst_bne  && !rj_eq_rd
-                   || inst_blt  &&  rj_value < rkd_value
-                   || inst_bge  &&  rj_value >= rkd_value
+                   || inst_blt  &&  $signed(rj_value) < $signed(rkd_value)
+                   || inst_bge  &&  $signed(rj_value) >= $signed(rkd_value)
                    || inst_bltu &&  $unsigned(rj_value) < $unsigned(rkd_value)
                    || inst_bgeu &&  $unsigned(rj_value) >= $unsigned(rkd_value)
                    || inst_jirl
@@ -647,6 +648,8 @@ assign div_result = (inst_div_wu_EX) ? unsigned_divider_res[63:32] :
 
 wire[31:0] result_all;
 assign result_all = if_divider_EX ? div_result : alu_result;
+wire[1:0] mem_offset;
+assign mem_offset = alu_result[1:0];
 
 always @(posedge clk) begin
     if (reset) begin
@@ -660,6 +663,8 @@ always @(posedge clk) begin
         mem_half_MEM <= 1'b0;
         mem_word_MEM <= 1'b0;
         mem_signed_MEM <= 1'b0;
+
+        mem_offset_MEM <= 2'b00;
     end
     else if(allow_in_EX)begin
         res_from_mem_MEM <= res_from_mem_EX;
@@ -672,6 +677,8 @@ always @(posedge clk) begin
         mem_half_MEM <= mem_half_EX;
         mem_word_MEM <= mem_word_EX;
         mem_signed_MEM <= mem_signed_EX;
+
+        mem_offset_MEM <= mem_offset;
     end
 end
 
@@ -694,14 +701,23 @@ assign ready_go_EX = if_divider_EX&&valid_EX ? (unsigned_dout_tvalid || signed_d
 //-- MEM stage
 
 assign data_sram_en    = (mem_we_EX||res_from_mem_EX) && valid && valid_EX && ready_go_EX; //实际上要有EX的寄存器发请求，MEM才能接受
-assign data_sram_we    = mem_we_EX? {{2{mem_word_EX}}, mem_half_EX | mem_word_EX, 1'b1}  : 4'b0;
+// assign data_sram_we    = mem_we_EX? {{2{mem_word_EX}}, mem_half_EX | mem_word_EX, 1'b1}  
+//                             : 4'b0;
+assign data_sram_we    = mem_we_EX? {mem_word_EX|(mem_half_EX&mem_offset[1])|(mem_byte_EX&mem_offset[1]&mem_offset[0])
+                                    ,mem_word_EX|(mem_half_EX&mem_offset[1])|(mem_byte_EX&mem_offset[1]&~mem_offset[0])
+                                    ,mem_word_EX|(mem_half_EX&~mem_offset[1])|(mem_byte_EX&~mem_offset[1]&mem_offset[0])
+                                    ,mem_word_EX|(mem_half_EX&~mem_offset[1])|(mem_byte_EX&~mem_offset[1]&~mem_offset[0])}//! half/byte的写入掩码与offset有关
+                                    : 4'b0;
 assign data_sram_addr  = {alu_result[31:2], 2'b00};
-assign mem_offset   = alu_result[1:0];
 decoder_2_4 u_dec4(
-    .in(mem_offset),
+    .in(mem_offset_MEM),
     .out(mem_offset_d)
 );
-assign data_sram_wdata = data_sram_wdata_EX;
+
+// assign data_sram_wdata = data_sram_wdata_EX;
+assign data_sram_wdata = ({32{mem_word_EX}}&data_sram_wdata_EX)
+                        |({32{mem_half_EX}}&{2{data_sram_wdata_EX[15:0]}})
+                        |({32{mem_byte_EX}}&{4{data_sram_wdata_EX[7:0]}});//! 在内存将要写入的位置连接上正确的数据
 wire[31:0] final_result_MEM;
 assign final_result_MEM = res_from_mem_MEM ? mem_result : result_all_MEM;
 
