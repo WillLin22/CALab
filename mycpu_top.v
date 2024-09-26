@@ -139,12 +139,15 @@ reg [4:0] dest_WB;
 reg [31:0] final_result_WB, pc_WB;
 reg rf_we_WB;
 
+reg if_divider_EX;
+
 reg mem_byte_EX, mem_half_EX, mem_word_EX;
 reg mem_byte_MEM, mem_half_MEM, mem_word_MEM;
 
 reg mem_signed_EX;
 reg mem_signed_MEM;
 
+reg inst_div_w_EX, inst_div_wu_EX, inst_mod_w_EX, inst_mod_wu_EX;
 
 assign inst_sram_we    = 4'b0;
 assign inst_sram_wdata = 32'b0;
@@ -506,6 +509,13 @@ always @(posedge clk) begin
         mem_half_EX <= 1'b0;
         mem_word_EX <= 1'b0;
         mem_signed_EX <= 1'b0;
+
+        if_divider_EX <= 1'b0;
+
+        inst_div_w_EX <= 1'b0;
+        inst_div_wu_EX <= 1'b0;
+        inst_mod_w_EX <= 1'b0;
+        inst_mod_wu_EX <= 1'b0;
     end
     else if(allow_in_ID)begin
         alu_src1_EX <= alu_src1;
@@ -525,6 +535,13 @@ always @(posedge clk) begin
         mem_half_EX <= mem_half;
         mem_word_EX <= mem_word;
         mem_signed_EX <= mem_signed;
+
+        if_divider_EX <= if_divider;
+
+        inst_div_w_EX <= inst_div_w;
+        inst_div_wu_EX <= inst_div_wu;
+        inst_mod_w_EX <= inst_mod_w;
+        inst_mod_wu_EX <= inst_mod_wu;
     end
 end
 
@@ -552,6 +569,7 @@ alu u_alu(
 wire [31:0] divider_dividend,divider_divisor;
 wire [63:0] unsigned_divider_res,signed_divider_res;
 
+//* Divider
 wire unsigned_dividend_tready,unsigned_dividend_tvalid,unsigned_divisor_tready,unsigned_divisor_tvalid,unsigned_dout_tvalid;
 wire signed_dividend_tready,signed_dividend_tvalid,signed_divisor_tready,signed_divisor_tvalid,signed_dout_tvalid;
 
@@ -590,13 +608,13 @@ always@(posedge clk) begin
         unsigned_dividend_tvalid_reg <= 1'b0;
         unsigned_divisor_tvalid_reg <= 1'b0;
     end
+    else if (allow_in_EX && (inst_div_wu | inst_mod_wu) && valid_ID) begin//!需要优先判断，因为这个时候tready可能拉高，这样就发不出去了
+        unsigned_dividend_tvalid_reg <= 1'b1;
+        unsigned_divisor_tvalid_reg <= 1'b1;
+    end
     else if (unsigned_dividend_tready && unsigned_divisor_tready) begin //如果实际运行的时候发现dividend_tready和divisor_tready不一定是同时拉高，可能需要把两个always块拆成四个
         unsigned_dividend_tvalid_reg <= 1'b0;
         unsigned_divisor_tvalid_reg <= 1'b0;
-    end
-    else if (allow_in_EX && (inst_div_wu | inst_mod_wu)) begin
-        unsigned_dividend_tvalid_reg <= 1'b1;
-        unsigned_divisor_tvalid_reg <= 1'b1;
     end
 end
 
@@ -605,13 +623,13 @@ always@(posedge clk) begin
         signed_dividend_tvalid_reg <= 1'b0;
         signed_divisor_tvalid_reg <= 1'b0;
     end
+    else if (allow_in_EX && (inst_div_w | inst_mod_w) && valid_ID) begin
+        signed_dividend_tvalid_reg <= 1'b1;
+        signed_divisor_tvalid_reg <= 1'b1;
+    end
     else if (signed_dividend_tready && signed_divisor_tready) begin
         signed_dividend_tvalid_reg <= 1'b0;
         signed_divisor_tvalid_reg <= 1'b0;
-    end
-    else if (allow_in_EX && (inst_div_w | inst_mod_w)) begin
-        signed_dividend_tvalid_reg <= 1'b1;
-        signed_divisor_tvalid_reg <= 1'b1;
     end
 end
 
@@ -621,12 +639,14 @@ assign signed_dividend_tvalid = signed_dividend_tvalid_reg;
 assign signed_divisor_tvalid = signed_divisor_tvalid_reg;
 
 wire [31:0] div_result;
-assign div_result = (inst_div_wu) ? unsigned_divider_res[63:32] : 
-                    (inst_div_w)  ? signed_divider_res[63:32] : 
-                    (inst_mod_wu) ? unsigned_divider_res[31:0] : signed_divider_res[31:0];
+assign div_result = (inst_div_wu_EX) ? unsigned_divider_res[63:32] : 
+                    (inst_div_w_EX)  ? signed_divider_res[63:32] : 
+                    (inst_mod_wu_EX) ? unsigned_divider_res[31:0] : signed_divider_res[31:0];
+
+//* end Divider
 
 wire[31:0] result_all;
-assign result_all = if_divider ? div_result : alu_result;
+assign result_all = if_divider_EX ? div_result : alu_result;
 
 always @(posedge clk) begin
     if (reset) begin
@@ -668,7 +688,7 @@ always @(posedge clk) begin
     end
 end
 
-assign ready_go_EX = if_divider ? (unsigned_dout_tvalid || signed_dout_tvalid) : 1'b1;
+assign ready_go_EX = if_divider_EX&&valid_EX ? (unsigned_dout_tvalid || signed_dout_tvalid) : 1'b1;
 
 
 //-- MEM stage
