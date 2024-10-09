@@ -130,4 +130,24 @@ always @(posedge clock) begin
                         | ~csr_wmask[`CSR_SAVE_DATA] & csr_save3_data;
 end
 
+wire [31:0] csr_crmd_rvalue = {28'b0, csr_crmd_da, csr_crmd_ie, csr_crmd_plv};
+wire [31:0] csr_prmd_rvalue = {29'b0, csr_prmd_pie, csr_prmd_pplv};
+wire [31:0] csr_ecfg_rvalue = {19'b0, csr_ecfg_lie};
+
+assign csr_rvalue = {32{csr_num==`CSR_CRMD}} & csr_crmd_rvalue
+                  | {32{csr_num==`CSR_PRMD}} & csr_prmd_rvalue
+                  | {32{csr_num==`CSR_ECFG}} & csr_ecfg_rvalue
+                  | {32{csr_num==`CSR_ESTAT}} & csr_estat_rvalue
+                  | {32{csr_num==`CSR_ERA}} & csr_era_rvalue
+                  | {32{csr_num==`CSR_BADV}} & csr_badv_rvalue
+                  | {32{csr_num==`CSR_EENTRY}} & csr_eentey_rvalue
+                  | {32{csr_num==`CSR_SAVE0}} & csr_save0_rvalue
+                  | {32{csr_num==`CSR_SAVE1}} & csr_save1_rvalue
+                  | {32{csr_num==`CSR_SAVE2}} & csr_save2_rvalue
+                  | {32{csr_num==`CSR_SAVE3}} & csr_save3_rvalue
+                  | {32{csr_num==`CSR_TID}} & csr_tid_rvalue
+                  | {32{csr_num==`CSR_TCFG}} & csr_tcfg_rvalue
+                  | {32{csr_num==`CSR_TVAL}} & csr_tval_rvalue;
+
+
 endmodule
