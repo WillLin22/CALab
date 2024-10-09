@@ -695,12 +695,12 @@ always @(posedge clk) begin
     end
 end
 
-assign ready_go_EX = if_divider_EX&&valid_EX ? (unsigned_dout_tvalid || signed_dout_tvalid) : 1'b1;
+assign ready_go_EX = if_divider_EX && valid_EX ? (unsigned_dout_tvalid || signed_dout_tvalid) : 1'b1;
 
 
 //-- MEM stage
 
-assign data_sram_en    = (mem_we_EX||res_from_mem_EX) && valid && valid_EX && ready_go_EX; //实际上要有EX的寄存器发请求，MEM才能接受
+assign data_sram_en    = (mem_we_EX || res_from_mem_EX) && valid && valid_EX && ready_go_EX; //实际上要有EX的寄存器发请求，MEM才能接受
 // assign data_sram_we    = mem_we_EX? {{2{mem_word_EX}}, mem_half_EX | mem_word_EX, 1'b1}  
 //                             : 4'b0;
 assign data_sram_we    = mem_we_EX? {mem_word_EX|(mem_half_EX&mem_offset[1])|(mem_byte_EX&mem_offset[1]&mem_offset[0])
