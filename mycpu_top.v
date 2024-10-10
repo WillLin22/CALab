@@ -92,6 +92,11 @@ wire        inst_bl;
 wire        inst_beq;
 wire        inst_bne;
 wire        inst_lu12i_w;
+wire        inst_csrrd;
+wire        inst_csrwr;
+wire        inst_csrxchg;
+wire        inst_ertn;
+wire        inst_syscall;
 
 wire        need_ui5;
 wire        need_si12;
@@ -231,6 +236,12 @@ assign inst_ld_hu  = op_31_26_d[6'h0a] & op_25_22_d[4'h9];
 assign inst_st_b   = op_31_26_d[6'h0a] & op_25_22_d[4'h4];
 assign inst_st_h   = op_31_26_d[6'h0a] & op_25_22_d[4'h5];
 
+assign inst_csrrd = op_31_26_d[6'h1] & ~inst[25] & ~inst[24] & (rj==0);
+assign inst_csrwr = op_31_26_d[6'h1] & ~inst[25] & ~inst[24] & (rj==1);
+assign inst_csrxchg = op_31_26_d[6'h1] & ~inst[25] & ~inst[24] & (rj!=0 & rj!=1);
+assign inst_ertn = op_31_26_d[6'h1] & op_25_22_d[4'h9] 
+                 & op_21_20_d[2'h0] & op_19_15_d[5'h10] & (rk==5'b01110);
+assign inst_syscall = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h16];
 
 //--
 
@@ -279,7 +290,7 @@ assign br_offs = need_si26 ? {{ 4{i26[25]}}, i26[25:0], 2'b0} :
 assign jirl_offs = {{14{i16[15]}}, i16[15:0], 2'b0};
 
 assign src_reg_is_rd = inst_beq | inst_bne | inst_blt | inst_bge | inst_bltu | inst_bgeu |
-                       inst_st_w | inst_st_b | inst_st_h;
+                       inst_st_w | inst_st_b | inst_st_h | inst_csrrd | inst_csrwr | inst_csrxchg;
 
 assign src1_is_pc    = inst_jirl | inst_bl | inst_pcaddu12i;
 
@@ -302,7 +313,7 @@ assign src2_is_imm   = inst_slli_w |
 
 assign res_from_mem  = inst_ld_w |inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu;
 assign dst_is_r1     = inst_bl;
-assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b & ~inst_st_b & ~inst_st_h & ~inst_bge & ~inst_bgeu & ~inst_blt & ~inst_bltu;
+assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b & ~inst_st_b & ~inst_st_h & ~inst_bge & ~inst_bgeu & ~inst_blt & ~inst_bltu & ~inst_ertn; // exp12 csr 指令中只有 ertn 不写寄存器
 assign mem_we        = inst_st_w|inst_st_b|inst_st_h;
 assign dest          = dst_is_r1 ? 5'd1 : rd;
 
@@ -374,7 +385,7 @@ assign allow_in_WB = ready_go_WB && valid;
 wire br_concel;
 
 assign seq_pc       = pc + 3'h4;
-assign nextpc       = br_taken&valid_ID ? br_target : seq_pc;
+assign nextpc       = br_taken & valid_ID ? br_target : seq_pc; // 需要修改！！
 assign inst_sram_en = 1'b1;
 assign inst_sram_addr = pc;
 
@@ -411,7 +422,7 @@ assign pc_IF=pc;
 
 //-- ID stage
 
-//* WAR
+//* WAR  // 需要添加 CSR 的阻塞
 //inst save for wait
 reg[31:0] inst_reg;
 
@@ -491,6 +502,15 @@ assign ready_go_ID =~( (reg_is_war[rf_raddr1]&used_rj&~rf_rd1_is_forward&rf_rd1_
                       |(reg_is_war[rf_raddr2]&used_rkd&~rf_rd2_is_forward&rf_rd2_nz));//If forward, then go.
 // end WAR
 
+// ID --> EX CSR 的信号和数据传递
+wire [13:0] csr_num_EX;
+wire ex_syscall_EX;
+wire [14:0] code_EX;
+wire csr_EX;
+wire csr_write_EX;
+wire [31:0] csr_wmask_EX;
+wire ertn_flush_EX;
+
 always @(posedge clk) begin
     if (reset) begin
         alu_src1_EX <= 32'b0;
@@ -517,6 +537,14 @@ always @(posedge clk) begin
         inst_div_wu_EX <= 1'b0;
         inst_mod_w_EX <= 1'b0;
         inst_mod_wu_EX <= 1'b0;
+
+        csr_num_EX <= 14'b0;
+        ex_syscall_EX <= 1'b0;
+        code_EX <= 15'b0;
+        csr_EX <= 1'b0;
+        csr_write_EX <= 1'b0;
+        csr_wmask_EX <= 32'b0;
+        ertn_flush_EX <= 1'b0;
     end
     else if(allow_in_ID)begin
         alu_src1_EX <= alu_src1;
@@ -543,6 +571,14 @@ always @(posedge clk) begin
         inst_div_wu_EX <= inst_div_wu;
         inst_mod_w_EX <= inst_mod_w;
         inst_mod_wu_EX <= inst_mod_wu;
+
+        csr_num_EX <= inst[23:10];
+        ex_syscall_EX <= inst_syscall;
+        code_EX <= inst[14:0];
+        csr_EX <= inst_csrrd | inst_csrwr | inst_csrxchg;
+        csr_write_EX <= inst_csrwr || inst_csrxchg;
+        csr_wmask_EX <= inst_csrxchg ? rj_value : 32'hffffffff;  //mask <-- rj
+        ertn_flush_EX <= inst_ertn;
     end
 end
 
@@ -651,6 +687,17 @@ assign result_all = if_divider_EX ? div_result : alu_result;
 wire[1:0] mem_offset;
 assign mem_offset = alu_result[1:0];
 
+
+// EX --> MEM CSR 的信号和数据传递
+wire [13:0] csr_num_MEM;
+wire ex_syscall_MEM;
+wire [14:0] code_MEM;
+wire csr_MEM;
+wire csr_write_MEM;
+wire [31:0] csr_wmask_MEM;
+wire ertn_flush_MEM;
+wire [31:0] csr_wvalue_MEM;
+
 always @(posedge clk) begin
     if (reset) begin
         res_from_mem_MEM <= 1'b0;
@@ -665,6 +712,15 @@ always @(posedge clk) begin
         mem_signed_MEM <= 1'b0;
 
         mem_offset_MEM <= 2'b00;
+
+        csr_num_MEM <= 14'b0;
+        ex_syscall_MEM <= 1'b0;
+        code_MEM <= 15'b0;
+        csr_MEM <= 1'b0;
+        csr_write_MEM <= 1'b0;
+        csr_wmask_MEM <= 32'b0;
+        ertn_flush_MEM <= 1'b0;
+        csr_wvalue_MEM <= 32'b0;
     end
     else if(allow_in_EX)begin
         res_from_mem_MEM <= res_from_mem_EX;
@@ -679,6 +735,15 @@ always @(posedge clk) begin
         mem_signed_MEM <= mem_signed_EX;
 
         mem_offset_MEM <= mem_offset;
+
+        csr_num_MEM <= csr_num_EX;
+        ex_syscall_MEM <= ex_syscall_EX;
+        code_MEM <= code_EX;
+        csr_MEM <= csr_EX;
+        csr_write_MEM <= csr_write_EX;
+        csr_wmask_MEM <= csr_wmask_EX;
+        ertn_flush_MEM <= ertn_flush_EX;
+        csr_wvalue_MEM <= rkd_value_EX;
     end
 end
 
@@ -721,18 +786,46 @@ assign data_sram_wdata = ({32{mem_word_EX}}&data_sram_wdata_EX)
 wire[31:0] final_result_MEM;
 assign final_result_MEM = res_from_mem_MEM ? mem_result : result_all_MEM;
 
+// MEM --> WB CSR 的信号和数据传递
+wire [13:0] csr_num_WB;
+wire ex_syscall_WB;
+wire [14:0] code_WB;
+wire csr_WB;
+wire csr_write_WB;
+wire [31:0] csr_wmask_WB;
+wire ertn_flush_WB;
+wire [31:0] csr_wvalue_WB;
+
 always @(posedge clk) begin
     if (reset) begin
         final_result_WB <= 32'b0;
         pc_WB <= 32'b0;
         dest_WB <= 5'b0;
         rf_we_WB <= 1'b0;
+
+        csr_num_WB <= 14'b0;
+        ex_syscall_WB <= 1'b0;
+        code_WB <= 15'b0;
+        csr_WB <= 1'b0;
+        csr_write_WB <= 1'b0;
+        csr_wmask_WB <= 32'b0;
+        ertn_flush_WB <= 1'b0;
+        csr_wvalue_WB <= 32'b0;
     end
     else if(allow_in_MEM) begin
         final_result_WB <= final_result_MEM;
         pc_WB <= pc_MEM;
         dest_WB <= dest_MEM;
         rf_we_WB <= rf_we_MEM;
+
+        csr_num_WB <= csr_num_MEM;
+        ex_syscall_WB <= ex_syscall_MEM;
+        code_WB <= code_MEM;
+        csr_WB <= csr_MEM;
+        csr_write_WB <= csr_write_MEM;
+        csr_wmask_WB <= csr_wmask_MEM;
+        ertn_flush_WB <= ertn_flush_MEM;
+        csr_wvalue_WB <= csr_wvalue_MEM;
     end
 end
 
@@ -779,5 +872,30 @@ assign result_forward[2] = final_result_WB;
 assign dest_forward[2] = dest_WB & {5{rf_we_WB & valid_WB & ready_go_WB}};
 
 assign ready_go_WB = 1'b1;
+
+wire csr_re;
+assign csr_re = 1'b1;
+
+csr csr(
+    .clk                (clk),
+    .reset              (reset),
+    
+    .csr_re             (csr_re),
+    .csr_num            (csr_num_WB),
+    .csr_rvalue         (csr_rvalue),
+
+    .csr_we             (csr_write_WB),
+    .csr_wmask          (csr_wmask_WB),
+    .csr_wvalue         (csr_wvalue_WB),
+
+    .ex_entry           (ex_entry),
+    .has_int            (has_int),
+    .ertn_pc            (ertn_pc),
+    .ertn_flush         (ertn_flush_WB),
+    .wb_ex              (ex_syscall_WB),
+    .wb_ecode           (ex_syscall_WB ? 6'hb : 6'h0),
+    .wb_esubcode        (ex_syscall_WB ? 9'h0 : 9'h0),
+    .wb_epc             (pc_WB)
+);
 
 endmodule

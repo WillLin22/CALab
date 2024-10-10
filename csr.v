@@ -5,23 +5,23 @@ module csr(
     input wire rst,
 
     // 指令访问接口
-    input wire csr_re,              // 读使能
-    input wire [13:0] csr_num,      // 寄存器号
+    input wire  csr_re,              // 读使能
+    input wire  [13:0] csr_num,      // 寄存器号
     output wire [31:0] csr_rvalue,  // 寄存器读返回值
 
-    input wire csr_we,              // 写使能
-    input wire [31:0] csr_wmask,    // 写掩码
-    input wire [31:0] csr_wvalue,   // 写数据
+    input wire  csr_we,              // 写使能
+    input wire  [31:0] csr_wmask,    // 写掩码
+    input wire  [31:0] csr_wvalue,   // 写数据
 
     // 与处理器核内部硬件电路逻辑直接较需的控制、状态信号接口
-    output wire [31:0] ex_entry,    // 送往pre-IF级的异常处理入口地址
-    output wire has_int,            // 送往ID级的中断有效信号
-    output wire [31:0] ertn_pc,     // 送往pre-IF级的异常返回地址
-    input wire ertn_flush,   // 来自WB级的ertn执行的有效信号
-    input wire wb_ex,        // 来自WB级的异常触发信号
-    input wire [5:0] wb_ecode,  // 来自WB级的异常类型1级码
-    input wire [8:0] wb_esubcode, // 来自WB级的异常类型2级码
-    input wire [31:0] wb_epc,  // 来自WB级的异常发生地址
+    output wire  [31:0] ex_entry,    // 送往pre-IF级的异常处理入口地址
+    output wire  has_int,            // 送往ID级的中断有效信号
+    output wire  [31:0] ertn_pc,     // 送往pre-IF级的异常返回地址
+    input wire   ertn_flush,   // 来自WB级的ertn执行的有效信号
+    input wire   wb_ex,        // 来自WB级的异常触发信号
+    input wire   [5:0] wb_ecode,  // 来自WB级的异常类型1级码
+    input wire   [8:0] wb_esubcode, // 来自WB级的异常类型2级码
+    input wire   [31:0] wb_epc,  // 来自WB级的异常发生地址
 );
 
 /* ------------------ CRMD 当前模式信息 ------------------*/
@@ -148,6 +148,5 @@ assign csr_rvalue = {32{csr_num==`CSR_CRMD}} & csr_crmd_rvalue
                   | {32{csr_num==`CSR_TID}} & csr_tid_rvalue
                   | {32{csr_num==`CSR_TCFG}} & csr_tcfg_rvalue
                   | {32{csr_num==`CSR_TVAL}} & csr_tval_rvalue;
-
 
 endmodule
