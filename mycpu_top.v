@@ -385,7 +385,7 @@ assign allow_in_WB = ready_go_WB && valid;
 wire br_concel;
 
 assign seq_pc       = pc + 3'h4;
-assign nextpc       = br_taken & valid_ID ? br_target : seq_pc; // 需要修改！！
+assign nextpc       = wb_ex? ex_entry : ertn_flush? ertn_pc : br_taken & valid_ID? br_target : seq_pc; // 若中断，则进入中断处理入口；若
 assign inst_sram_en = 1'b1;
 assign inst_sram_addr = pc;
 
@@ -873,10 +873,12 @@ assign dest_forward[2] = dest_WB & {5{rf_we_WB & valid_WB & ready_go_WB}};
 
 assign ready_go_WB = 1'b1;
 
-wire csr_re;
-assign csr_re = 1'b1;
+wire csr_re = 1'b1;
+wire wb_ex = ex_syscall_WB;
+wire [5:0] wb_ecode = ex_syscall_WB ? 6'hb : 6'h0;
+wire [8:0] wb_esubcode = ex_syscall_WB ? 9'h0 : 9'h0;
 
-csr csr(
+csr u_csr(
     .clk                (clk),
     .reset              (reset),
     
@@ -888,14 +890,14 @@ csr csr(
     .csr_wmask          (csr_wmask_WB),
     .csr_wvalue         (csr_wvalue_WB),
 
-    .ex_entry           (ex_entry),
-    .has_int            (has_int),
-    .ertn_pc            (ertn_pc),
-    .ertn_flush         (ertn_flush_WB),
-    .wb_ex              (ex_syscall_WB),
-    .wb_ecode           (ex_syscall_WB ? 6'hb : 6'h0),
-    .wb_esubcode        (ex_syscall_WB ? 9'h0 : 9'h0),
-    .wb_epc             (pc_WB)
+    .ex_entry           (ex_entry),      // 送往pre-IF级的异常处理地址
+    .has_int            (has_int),       // 送往 ID 级的中断有效信号
+    .ertn_pc            (ertn_pc),       // 送往pre-IF级的异常返回地址
+    .ertn_flush         (ertn_flush_WB), // 来自WB级的ertn执行的有效信号
+    .wb_ex              (wb_ex), // 来自WB级的异常触发信号
+    .wb_ecode           (wb_ecode),
+    .wb_esubcode        (wb_esubcode),
+    .wb_epc             (pc_WB)         // 来自WB级的异常发生地址
 );
 
 endmodule
