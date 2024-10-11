@@ -33,7 +33,7 @@ module csr(
     wire  [ 8: 7] csr_crmd_datm;
 
 always @(posedge clk) begin
-    if (reset) begin
+    if (rst) begin
         csr_crmd_plv <= 2'b0;  // 复位时需要将 CRMD 的 PLV 域置为全 0 （最高优先级）
         csr_crmd_ie <= 1'b0;
     end
@@ -81,7 +81,7 @@ end
 reg  [12: 0] csr_ecfg_lie;      //局部中断使能位
 
 always @(posedge clk) begin
-    if (reset)
+    if (rst)
         csr_ecfg_lie <= 13'b0;
     else if (csr_we && csr_num==`CSR_ECFG)
         csr_ecfg_lie <= csr_wmask[`CSR_ECFG_LIE] & 13'h1bff & csr_wvalue[`CSR_ECFG_LIE]
@@ -94,7 +94,7 @@ reg  [ 5: 0] csr_estat_ecode;   // 例外类型一级编码
 reg  [ 8: 0] csr_estat_esubcode;// 例外类型二级编码
 
 always @(posedge clk) begin
-    if (reset)
+    if (rst)
         csr_estat_is[1:0] <= 2'b0;
     else if (csr_we && csr_num==`CSR_ESTAT)begin
         csr_estat_is[1:0] <= csr_wmask[`CSR_ESTAT_IS10] & csr_wvalue[`CSR_ESTAT_IS10]
@@ -182,7 +182,7 @@ assign csr_rvalue = {32{csr_num==`CSR_CRMD}} & csr_crmd_rvalue
                   | {32{csr_num==`CSR_SAVE0}} & csr_save0_rvalue
                   | {32{csr_num==`CSR_SAVE1}} & csr_save1_rvalue
                   | {32{csr_num==`CSR_SAVE2}} & csr_save2_rvalue
-                  | {32{csr_num==`CSR_SAVE3}} & csr_save3_rvalue
+                  | {32{csr_num==`CSR_SAVE3}} & csr_save3_rvalue;
                 //  | {32{csr_num==`CSR_TID}} & csr_tid_rvalue
                 //  | {32{csr_num==`CSR_TCFG}} & csr_tcfg_rvalue
                 //  | {32{csr_num==`CSR_TVAL}} & csr_tval_rvalue;
