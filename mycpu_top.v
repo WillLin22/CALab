@@ -374,18 +374,18 @@ assign debug_wb_rf_wdata = rf_wdata;
 
 //--  Waterflow
 //IF, ID, EX, MEM, WB
-//--  Handshake
-assign allow_in_IF = (allow_in_ID && ready_go_IF)&valid;
+//--  Handshake       // 握手信号这里这个逻辑和我之前写的不一样 我不一定改的对
+assign allow_in_IF = (allow_in_ID && ready_go_IF)&valid | wb_ex | ertn_flush; // 中断或ertn执行时重开流水线
 assign allow_in_ID = (allow_in_EX && ready_go_ID)&valid;
 assign allow_in_EX = (allow_in_MEM && ready_go_EX)&valid;
 assign allow_in_MEM = (allow_in_WB && ready_go_MEM)&valid;
-assign allow_in_WB = ready_go_WB && valid;
+assign allow_in_WB = ready_go_WB & ~ valid_WB; 
 
 //--  Pre-IF stage
 wire br_concel;
 
 assign seq_pc       = pc + 3'h4;
-assign nextpc       = wb_ex? ex_entry : ertn_flush? ertn_pc : br_taken & valid_ID? br_target : seq_pc; // 若中断，则进入中断处理入口；若
+assign nextpc       = wb_ex? ex_entry : ertn_flush? ertn_pc : br_taken & valid_ID? br_target : seq_pc; // 若中断，则进入中断处理入口；ertn 指令直到写回级才修改 CRMD，与此同时清空流水线并更新取指 PC。
 assign inst_sram_en = 1'b1;
 assign inst_sram_addr = pc;
 
@@ -577,7 +577,7 @@ always @(posedge clk) begin
         code_EX <= inst[14:0];
         csr_EX <= inst_csrrd | inst_csrwr | inst_csrxchg;
         csr_write_EX <= inst_csrwr || inst_csrxchg;
-        csr_wmask_EX <= inst_csrxchg ? rj_value : 32'hffffffff;  //mask <-- rj
+        csr_wmask_EX <= inst_csrxchg ? rj_value : {32{inst_csrwr}};  //mask <-- rj
         ertn_flush_EX <= inst_ertn;
     end
 end
@@ -586,6 +586,8 @@ always @(posedge clk) begin
     if (reset) begin
         valid_ID <= 1'b0;
     end
+    else if(wb_ex) // 中断异常，则取消流水级
+        valid_ID <= 1'b0;
     else if(br_taken && valid_ID && ready_go_ID) begin //只有IF取了错指令，而且ID指令有效，而且EX准备接受，才把valid=0传下去
         valid_ID <= 1'b0;
     end
@@ -755,6 +757,8 @@ always @(posedge clk) begin
     if (reset) begin
         valid_EX <= 1'b0;
     end
+    else if (wb_ex) 
+        valid_EX <= 1'b0;
     else if(allow_in_EX) begin
         valid_EX <= valid_ID && ready_go_ID;
     end
@@ -836,6 +840,8 @@ always @(posedge clk) begin
     if (reset) begin
         valid_MEM <= 1'b0;
     end
+    else if(wb_ex)
+        valid_MEM <= 1'b0;
     else if(allow_in_MEM) begin
         valid_MEM <= valid_EX && ready_go_EX;
     end
@@ -863,7 +869,9 @@ always @(posedge clk) begin
     if (reset) begin
         valid_WB <= 1'b0;
     end
-    else if(allow_in_WB) begin
+    else if (wb_ex)
+        valid_WB <= 1'b0;
+    else if (allow_in_WB) begin
         valid_WB <= valid_MEM && ready_go_MEM;
     end
 end
