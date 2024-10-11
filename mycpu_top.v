@@ -775,7 +775,7 @@ always @(posedge clk) begin
     if (reset) begin
         valid_EX <= 1'b0;
     end
-    else if (wb_ex) 
+    else if (flush_all) 
         valid_EX <= 1'b0;
     else if(allow_in_EX) begin
         valid_EX <= valid_ID && ready_go_ID;
@@ -858,7 +858,7 @@ always @(posedge clk) begin
     if (reset) begin
         valid_MEM <= 1'b0;
     end
-    else if(wb_ex)
+    else if(flush_all)
         valid_MEM <= 1'b0;
     else if(allow_in_MEM) begin
         valid_MEM <= valid_EX && ready_go_EX;
@@ -889,7 +889,7 @@ always @(posedge clk) begin
     if (reset) begin
         valid_WB <= 1'b0;
     end
-    else if (wb_ex)
+    else if (flush_all)
         valid_WB <= 1'b0;
     else if (allow_in_WB) begin
         valid_WB <= valid_MEM && ready_go_MEM;
