@@ -19,7 +19,7 @@
 //CSR分区
 //CSR_CRMD
 `define CSR_CRMD_PLV 1:0
-`define CSR_CRMD_IE 2:2
+`define CSR_CRMD_PIE 2:2
 `define CSR_CRMD_DA 3:3
 `define CSR_CRMD_PG 4:4
 `define CSR_CRMD_DATF 6:5
@@ -31,10 +31,8 @@
 `define CSR_PRMD_PIE 2:2
 `define CSR_PRMD_ZERO 31:3
 
-
-
 //CSR_ESTAT
-`define CSR_ESTAT_IS_SOFT 1:0     
+`define CSR_ESTAT_IS10  1 :0    
 `define CSR_ESTAT_IS_HARD 9:2   
 `define CSR_ESTAT_IS_LEFT1 10    
 `define CSR_ESTAT_IS_TI 11       
