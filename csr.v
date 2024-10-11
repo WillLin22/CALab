@@ -21,16 +21,16 @@ module csr(
     input wire   wb_ex,        // 来自WB级的异常触发信号
     input wire   [5:0] wb_ecode,  // 来自WB级的异常类型1级码
     input wire   [8:0] wb_esubcode, // 来自WB级的异常类型2级码
-    input wire   [31:0] wb_epc // 来自WB级的异常发生地址
+    input wire   [31:0] wb_pc // 来自WB级的异常发生地址
 );
 
 /* ------------------ CRMD 当前模式信息 ------------------*/
     reg  [ 1: 0] csr_crmd_plv;      //CRMD的PLV域，当前特权等级
     reg          csr_crmd_ie;       //CRMD的全局中断使能信号
-    reg          csr_crmd_da;       //CRMD的直接地址翻译使能
-    reg          csr_crmd_pg;
-    reg  [ 6: 5] csr_crmd_datf;
-    reg  [ 8: 7] csr_crmd_datm;
+    wire          csr_crmd_da;       //CRMD的直接地址翻译使能
+    wire          csr_crmd_pg;
+    wire  [ 6: 5] csr_crmd_datf;
+    wire  [ 8: 7] csr_crmd_datm;
 
 always @(posedge clk) begin
     if (reset) begin
@@ -177,15 +177,15 @@ assign csr_rvalue = {32{csr_num==`CSR_CRMD}} & csr_crmd_rvalue
                   | {32{csr_num==`CSR_ECFG}} & csr_ecfg_rvalue
                   | {32{csr_num==`CSR_ESTAT}} & csr_estat_rvalue
                   | {32{csr_num==`CSR_ERA}} & csr_era_rvalue
-                  | {32{csr_num==`CSR_BADV}} & csr_badv_rvalue
+                //  | {32{csr_num==`CSR_BADV}} & csr_badv_rvalue
                   | {32{csr_num==`CSR_EENTRY}} & csr_eentey_rvalue
                   | {32{csr_num==`CSR_SAVE0}} & csr_save0_rvalue
                   | {32{csr_num==`CSR_SAVE1}} & csr_save1_rvalue
                   | {32{csr_num==`CSR_SAVE2}} & csr_save2_rvalue
                   | {32{csr_num==`CSR_SAVE3}} & csr_save3_rvalue
-                  | {32{csr_num==`CSR_TID}} & csr_tid_rvalue
-                  | {32{csr_num==`CSR_TCFG}} & csr_tcfg_rvalue
-                  | {32{csr_num==`CSR_TVAL}} & csr_tval_rvalue;
+                //  | {32{csr_num==`CSR_TID}} & csr_tid_rvalue
+                //  | {32{csr_num==`CSR_TCFG}} & csr_tcfg_rvalue
+                //  | {32{csr_num==`CSR_TVAL}} & csr_tval_rvalue;
 
 assign has_int = (|(csr_estat_is[11:0] & csr_ecfg_lie[11:0])) & csr_crmd_ie; // 送往ID级的中断有效信号 中断的使能情况分两个层次：低层次是与各中断一一对应的局部中断使能，通过 ECFG 控制寄存器的 LIE（Local Interrupt Enable）域的 11, 9..0 位来控制；高层次是全局中断使能，通过 CRMD 控制状态寄存器的 IE（Interrupt Enable）位来控制。
 assign ex_entry = csr_eentey_rvalue; // 送往pre-IF级的异常处理入口地址

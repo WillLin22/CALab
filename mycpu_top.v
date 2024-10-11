@@ -929,7 +929,7 @@ csr u_csr(
     .wb_ex              (wb_ex), // 来自WB级的异常触发信号
     .wb_ecode           (wb_ecode),
     .wb_esubcode        (wb_esubcode),
-    .wb_epc             (pc_WB)         // 来自WB级的异常发生地址
+    .wb_pc             (pc_WB)         // 来自WB级的异常发生地址
 );
 
 endmodule
