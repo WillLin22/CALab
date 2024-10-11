@@ -1,4 +1,4 @@
-`include "csr_defines.v"
+`include "csr_defines.vh"
 
 module csr(
     input wire clk,
@@ -21,7 +21,7 @@ module csr(
     input wire   wb_ex,        // 来自WB级的异常触发信号
     input wire   [5:0] wb_ecode,  // 来自WB级的异常类型1级码
     input wire   [8:0] wb_esubcode, // 来自WB级的异常类型2级码
-    input wire   [31:0] wb_epc,  // 来自WB级的异常发生地址
+    input wire   [31:0] wb_epc // 来自WB级的异常发生地址
 );
 
 /* ------------------ CRMD 当前模式信息 ------------------*/
@@ -32,21 +32,26 @@ module csr(
     reg  [ 6: 5] csr_crmd_datf;
     reg  [ 8: 7] csr_crmd_datm;
 
-always @(posedge clock) begin
-    if (reset)
+always @(posedge clk) begin
+    if (reset) begin
         csr_crmd_plv <= 2'b0;  // 复位时需要将 CRMD 的 PLV 域置为全 0 （最高优先级）
         csr_crmd_ie <= 1'b0;
-    else if (wb_ex)
+    end
+    else if (wb_ex)begin
         csr_crmd_plv <= 2'b0;
         csr_crmd_ie <= 1'b0;
-    else if (ertn_flush)
+    end
+    else if (ertn_flush)begin
         csr_crmd_plv <= csr_prmd_pplv;
         csr_crmd_ie <= csr_prmd_pie;
+    end
     else if (csr_we && csr_num ==`CSR_CRMD) //在被CSR写操作（csrwr、csrxchg）更新时，需要考虑写掩码
+    begin
         csr_crmd_plv <= csr_wmask[`CSR_CRMD_PLV] & csr_wvalue[`CSR_CRMD_PLV]
                        | ~csr_wmask[`CSR_CRMD_PLV] & csr_crmd_plv;
         csr_crmd_ie <= csr_wmask[`CSR_CRMD_PIE] & csr_wvalue[`CSR_CRMD_PIE]
                        | ~csr_wmask[`CSR_CRMD_PIE] & csr_crmd_ie;
+    end
 end
 
 // 目前处理器仅支持直接地址翻译模式，所以CRMD 的 DA、PG、DATF、DATM 域可以暂时置为常值。
@@ -59,7 +64,7 @@ assign csr_crmd_datm = 2'b00;
 reg  [ 1: 0] csr_prmd_pplv;     //CRMD的PLV域旧值
 reg          csr_prmd_pie;      //CRMD的IE域旧值
 
-always @(posedge clock) begin
+always @(posedge clk) begin
     if (wb_ex) begin
         csr_prmd_pplv <= csr_crmd_plv;
         csr_prmd_pie <= csr_crmd_ie;
@@ -75,7 +80,7 @@ end
 /* ------------------ ECFG 例外配置 ------------------*/
 reg  [12: 0] csr_ecfg_lie;      //局部中断使能位
 
-always @(posedge clock) begin
+always @(posedge clk) begin
     if (reset)
         csr_ecfg_lie <= 13'b0;
     else if (csr_we && csr_num==`CSR_ECFG)
@@ -88,13 +93,13 @@ reg  [12: 0] csr_estat_is;      // 例外中断的状态位（8个硬件中断+1
 reg  [ 5: 0] csr_estat_ecode;   // 例外类型一级编码
 reg  [ 8: 0] csr_estat_esubcode;// 例外类型二级编码
 
-always @(posedge clock) begin
+always @(posedge clk) begin
     if (reset)
         csr_estat_is[1:0] <= 2'b0;
-    else if (csr_we && csr_num==`CSR_ESTAT)
+    else if (csr_we && csr_num==`CSR_ESTAT)begin
         csr_estat_is[1:0] <= csr_wmask[`CSR_ESTAT_IS10] & csr_wvalue[`CSR_ESTAT_IS10]
                             | ~csr_wmask[`CSR_ESTAT_IS10] & csr_estat_is[1:0];
-        
+    end
     // csr_estat_is[9:2] <= hw_int_in[7:0]; //硬中断
     csr_estat_is[9:2] <= 8'b0;
     csr_estat_is[ 10] <= 1'b0;
@@ -111,7 +116,7 @@ always @(posedge clock) begin
     csr_estat_is[ 12] <= 1'b0;  // 核间中断
 end
 
-always @(posedge clock) begin
+always @(posedge clk) begin
     if (wb_ex) begin
         csr_estat_ecode <= wb_ecode;
         csr_estat_esubcode <= wb_esubcode;
@@ -121,7 +126,7 @@ end
 /* ------------------ ERA 例外返回地址 ------------------*/
 reg [31:0] csr_era_pc; 
 
-always @(posedge clock) begin
+always @(posedge clk) begin
     if (wb_ex)
         csr_era_pc <= wb_pc;
     else if (csr_we && csr_num == `CSR_ERA)
@@ -132,7 +137,7 @@ end
 /* ------------------ EENTRY 例外入口地址 ------------------*/
 reg  [25: 0] csr_eentry_va;     // 例外中断入口高位地址
 
-always @(posedge clock) begin
+always @(posedge clk) begin
     if (csr_we && csr_num == `CSR_EENTRY)
         csr_eentry_va <= csr_wmask[`CSR_EENTRY_VA] & csr_wvalue[`CSR_EENTRY_VA]
                         | ~csr_wmask[`CSR_EENTRY_VA] & csr_eentry_va;
@@ -140,7 +145,7 @@ end
 /* ------------------ SAVE0-SAVE3 数据保存 ------------------*/
 reg  [31: 0] csr_save0_data, csr_save1_data, csr_save2_data, csr_save3_data;
 
-always @(posedge clock) begin
+always @(posedge clk) begin
     if (csr_we && csr_num==`CSR_SAVE0)
         csr_save0_data <= csr_wmask[`CSR_SAVE_DATA] & csr_wvalue[`CSR_SAVE_DATA]
                         | ~csr_wmask[`CSR_SAVE_DATA] & csr_save0_data;

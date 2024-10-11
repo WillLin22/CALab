@@ -375,17 +375,20 @@ assign debug_wb_rf_wdata = rf_wdata;
 //--  Waterflow
 //IF, ID, EX, MEM, WB
 //--  Handshake       // 握手信号这里这个逻辑和我之前写的不一样 我不一定改的对
-assign allow_in_IF = (allow_in_ID && ready_go_IF)&valid | wb_ex | ertn_flush; // 中断或ertn执行时重开流水线
+wire flush_all;
+assign flush_all = wb_ex | ertn_flush_EX;
+
+assign allow_in_IF = (allow_in_ID && ready_go_IF)&valid; // 中断或ertn执行时重开流水线
 assign allow_in_ID = (allow_in_EX && ready_go_ID)&valid;
 assign allow_in_EX = (allow_in_MEM && ready_go_EX)&valid;
 assign allow_in_MEM = (allow_in_WB && ready_go_MEM)&valid;
-assign allow_in_WB = ready_go_WB & ~ valid_WB; 
+assign allow_in_WB = ready_go_WB & valid; 
 
 //--  Pre-IF stage
 wire br_concel;
 
 assign seq_pc       = pc + 3'h4;
-assign nextpc       = wb_ex? ex_entry : ertn_flush? ertn_pc : br_taken & valid_ID? br_target : seq_pc; // 若中断，则进入中断处理入口；ertn 指令直到写回级才修改 CRMD，与此同时清空流水线并更新取指 PC。
+assign nextpc       = wb_ex? ex_entry : (ertn_flush_EX? ertn_pc : (br_taken & valid_ID? br_target : seq_pc)); // 若中断，则进入中断处理入口；ertn 指令直到写回级才修改 CRMD，与此同时清空流水线并更新取指 PC。
 assign inst_sram_en = 1'b1;
 assign inst_sram_addr = pc;
 
@@ -471,6 +474,7 @@ assign rf_rdata1_forward = result_forward[2]&{32{accept_forward1[2]}}|result_for
 assign rf_rdata2_forward = result_forward[2]&{32{accept_forward2[2]}}|result_forward[1]&{32{accept_forward2[1]}}|result_forward[0]&{32{accept_forward2[0]}};
 
 //decide to wait or not
+/*
 reg[31:0] reg_for_writeback;
 wire[31:0] reg_is_writing, reg_want_writing,rf_waddr_dec, dest_dec, reg_is_war;
 decoder_5_32 reg_dec(
@@ -492,27 +496,36 @@ always @(posedge clk) begin
         reg_for_writeback <= (reg_for_writeback | reg_want_writing)&~reg_is_writing;
     end
 end
+*/
+wire [4:0] reg_want_write_EX, reg_want_write_MEM, reg_want_write_WB;
+
+wire rf_rd1_in_war, rf_rd2_in_war;
+assign rf_rd1_in_war = (rf_raddr1 == reg_want_write_EX) || (rf_raddr1 == reg_want_write_MEM) || (rf_raddr1 == reg_want_write_WB);
+assign rf_rd2_in_war = (rf_raddr2 == reg_want_write_EX) || (rf_raddr2 == reg_want_write_MEM) || (rf_raddr2 == reg_want_write_WB);
+
 //decide ready_go_ID
 wire used_rj,used_rkd;
 
 assign used_rj=~(inst_bl||inst_b)&~src1_is_pc;
 assign used_rkd=~src2_is_imm|inst_st_w|inst_st_b|inst_st_h;
-assign reg_is_war = reg_is_writing|reg_for_writeback;//当前正在写或者还没写回的寄存器
-assign ready_go_ID =   ~( (reg_is_war[rf_raddr1]&used_rj&~rf_rd1_is_forward&rf_rd1_nz)
-                      |(reg_is_war[rf_raddr2]&used_rkd&~rf_rd2_is_forward&rf_rd2_nz)
+// assign reg_is_war = reg_is_writing|reg_for_writeback;//当前正在写或者还没写回的寄存器
+assign ready_go_ID =   ~( (rf_rd1_in_war&used_rj&~rf_rd1_is_forward&rf_rd1_nz)
+                      | (rf_rd2_in_war&used_rkd&~rf_rd2_is_forward&rf_rd2_nz)//If forward, then go.
                       | (csr_EX & (used_rj | used_rkd) & & rf_rd1_nz & rf_rd2_nz)
                       | (csr_MEM & (used_rj | used_rkd) & & rf_rd1_nz & rf_rd2_nz)) 
-                      | ~ertn_flush | ~wb_ex | ~has_int; //If forward, then go.
+                      | ~valid_ID;
+                      //| ~ertn_flush_EX | ~wb_ex ;
+                      //| ~has_int;  产生int时要把中断信息传下去，而不是直接重开流水线
 // end WAR
 
 // ID --> EX CSR 的信号和数据传递
-wire [13:0] csr_num_EX;
-wire ex_syscall_EX;
-wire [14:0] code_EX;
-wire csr_EX;
-wire csr_write_EX;
-wire [31:0] csr_wmask_EX;
-wire ertn_flush_EX;
+reg [13:0] csr_num_EX;
+reg ex_syscall_EX;
+reg [14:0] code_EX;
+reg csr_EX;
+reg csr_write_EX;
+reg [31:0] csr_wmask_EX;
+reg ertn_flush_EX;
 
 always @(posedge clk) begin
     if (reset) begin
@@ -589,7 +602,7 @@ always @(posedge clk) begin
     if (reset) begin
         valid_ID <= 1'b0;
     end
-    else if(wb_ex) // 中断异常，则取消流水级
+    else if(flush_all) // 中断异常，则取消流水级
         valid_ID <= 1'b0;
     else if(br_taken && valid_ID && ready_go_ID) begin //只有IF取了错指令，而且ID指令有效，而且EX准备接受，才把valid=0传下去
         valid_ID <= 1'b0;
@@ -694,14 +707,14 @@ assign mem_offset = alu_result[1:0];
 
 
 // EX --> MEM CSR 的信号和数据传递
-wire [13:0] csr_num_MEM;
-wire ex_syscall_MEM;
-wire [14:0] code_MEM;
-wire csr_MEM;
-wire csr_write_MEM;
-wire [31:0] csr_wmask_MEM;
-wire ertn_flush_MEM;
-wire [31:0] csr_wvalue_MEM;
+reg [13:0] csr_num_MEM;
+reg ex_syscall_MEM;
+reg [14:0] code_MEM;
+reg csr_MEM;
+reg csr_write_MEM;
+reg [31:0] csr_wmask_MEM;
+reg ertn_flush_MEM;
+reg [31:0] csr_wvalue_MEM;
 
 always @(posedge clk) begin
     if (reset) begin
@@ -756,6 +769,8 @@ assign result_forward[0] = alu_result;
 //!计算的结果是内存地址，不需要前递
 assign dest_forward[0] = dest_EX & {5{~res_from_mem_EX & rf_we_EX & valid_EX & ready_go_EX}};//If the result will WB, then forward.
 
+assign reg_want_write_EX = dest_EX & {5{rf_we_EX & valid_EX}};
+
 always @(posedge clk) begin
     if (reset) begin
         valid_EX <= 1'b0;
@@ -794,14 +809,14 @@ wire[31:0] final_result_MEM;
 assign final_result_MEM = res_from_mem_MEM ? mem_result : result_all_MEM;
 
 // MEM --> WB CSR 的信号和数据传递
-wire [13:0] csr_num_WB;
-wire ex_syscall_WB;
-wire [14:0] code_WB;
-wire csr_WB;
-wire csr_write_WB;
-wire [31:0] csr_wmask_WB;
-wire ertn_flush_WB;
-wire [31:0] csr_wvalue_WB;
+reg [13:0] csr_num_WB;
+reg ex_syscall_WB;
+reg [14:0] code_WB;
+reg csr_WB;
+reg csr_write_WB;
+reg [31:0] csr_wmask_WB;
+reg ertn_flush_WB;
+reg [31:0] csr_wvalue_WB;
 
 always @(posedge clk) begin
     if (reset) begin
@@ -852,6 +867,8 @@ end
 
 assign ready_go_MEM = 1'b1;
 
+assign reg_want_write_MEM = dest_MEM & {5{rf_we_MEM & valid_MEM}};
+
 //-- WB stage
 
 assign rf_we    = rf_we_WB && valid_WB;
@@ -883,6 +900,10 @@ assign result_forward[2] = final_result_WB;
 assign dest_forward[2] = dest_WB & {5{rf_we_WB & valid_WB & ready_go_WB}};
 
 assign ready_go_WB = 1'b1;
+
+assign reg_want_write_WB = dest_WB & {5{rf_we_WB & valid_WB}};
+
+//* CSR
 
 wire csr_re = 1'b1;
 wire wb_ex = ex_syscall_WB;
