@@ -498,8 +498,11 @@ wire used_rj,used_rkd;
 assign used_rj=~(inst_bl||inst_b)&~src1_is_pc;
 assign used_rkd=~src2_is_imm|inst_st_w|inst_st_b|inst_st_h;
 assign reg_is_war = reg_is_writing|reg_for_writeback;//当前正在写或者还没写回的寄存器
-assign ready_go_ID =~( (reg_is_war[rf_raddr1]&used_rj&~rf_rd1_is_forward&rf_rd1_nz)
-                      |(reg_is_war[rf_raddr2]&used_rkd&~rf_rd2_is_forward&rf_rd2_nz));//If forward, then go.
+assign ready_go_ID =   ~( (reg_is_war[rf_raddr1]&used_rj&~rf_rd1_is_forward&rf_rd1_nz)
+                      |(reg_is_war[rf_raddr2]&used_rkd&~rf_rd2_is_forward&rf_rd2_nz)
+                      | (csr_EX & (used_rj | used_rkd) & & rf_rd1_nz & rf_rd2_nz)
+                      | (csr_MEM & (used_rj | used_rkd) & & rf_rd1_nz & rf_rd2_nz)) 
+                      | ~ertn_flush | ~wb_ex | ~has_int; //If forward, then go.
 // end WAR
 
 // ID --> EX CSR 的信号和数据传递
