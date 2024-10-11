@@ -376,7 +376,7 @@ assign debug_wb_rf_wdata = rf_wdata;
 //IF, ID, EX, MEM, WB
 //--  Handshake       // 握手信号这里这个逻辑和我之前写的不一样 我不一定改的对
 wire flush_all;
-assign flush_all = wb_ex | ertn_flush_EX;
+assign flush_all = wb_ex | ertn_flush_EX;  // 是不是要或上 has_int ? 不然has_int没有用到
 
 assign allow_in_IF = (allow_in_ID && ready_go_IF)&valid; // 中断或ertn执行时重开流水线
 assign allow_in_ID = (allow_in_EX && ready_go_ID)&valid;
@@ -511,8 +511,8 @@ assign used_rkd=~src2_is_imm|inst_st_w|inst_st_b|inst_st_h;
 // assign reg_is_war = reg_is_writing|reg_for_writeback;//当前正在写或者还没写回的寄存器
 assign ready_go_ID =   ~( (rf_rd1_in_war&used_rj&~rf_rd1_is_forward&rf_rd1_nz)
                       | (rf_rd2_in_war&used_rkd&~rf_rd2_is_forward&rf_rd2_nz)//If forward, then go.
-                      | (csr_EX & (used_rj | used_rkd) & & rf_rd1_nz & rf_rd2_nz)
-                      | (csr_MEM & (used_rj | used_rkd) & & rf_rd1_nz & rf_rd2_nz)) 
+                      | (csr_re_EX & (used_rj | used_rkd) & & rf_rd1_nz & rf_rd2_nz)
+                      | (csr_re_MEM & (used_rj | used_rkd) & & rf_rd1_nz & rf_rd2_nz)) 
                       | ~valid_ID;
                       //| ~ertn_flush_EX | ~wb_ex ;
                       //| ~has_int;  产生int时要把中断信息传下去，而不是直接重开流水线
@@ -522,7 +522,7 @@ assign ready_go_ID =   ~( (rf_rd1_in_war&used_rj&~rf_rd1_is_forward&rf_rd1_nz)
 reg [13:0] csr_num_EX;
 reg ex_syscall_EX;
 reg [14:0] code_EX;
-reg csr_EX;
+reg csr_re_EX;
 reg csr_write_EX;
 reg [31:0] csr_wmask_EX;
 reg ertn_flush_EX;
@@ -557,7 +557,7 @@ always @(posedge clk) begin
         csr_num_EX <= 14'b0;
         ex_syscall_EX <= 1'b0;
         code_EX <= 15'b0;
-        csr_EX <= 1'b0;
+        csr_re_EX <= 1'b0;
         csr_write_EX <= 1'b0;
         csr_wmask_EX <= 32'b0;
         ertn_flush_EX <= 1'b0;
@@ -591,7 +591,7 @@ always @(posedge clk) begin
         csr_num_EX <= inst[23:10];
         ex_syscall_EX <= inst_syscall;
         code_EX <= inst[14:0];
-        csr_EX <= inst_csrrd | inst_csrwr | inst_csrxchg;
+        csr_re_EX <= inst_csrrd | inst_csrwr | inst_csrxchg;
         csr_write_EX <= inst_csrwr || inst_csrxchg;
         csr_wmask_EX <= inst_csrxchg ? rj_value : {32{inst_csrwr}};  //mask <-- rj
         ertn_flush_EX <= inst_ertn;
@@ -710,7 +710,7 @@ assign mem_offset = alu_result[1:0];
 reg [13:0] csr_num_MEM;
 reg ex_syscall_MEM;
 reg [14:0] code_MEM;
-reg csr_MEM;
+reg csr_re_MEM;
 reg csr_write_MEM;
 reg [31:0] csr_wmask_MEM;
 reg ertn_flush_MEM;
@@ -734,7 +734,7 @@ always @(posedge clk) begin
         csr_num_MEM <= 14'b0;
         ex_syscall_MEM <= 1'b0;
         code_MEM <= 15'b0;
-        csr_MEM <= 1'b0;
+        csr_re_MEM <= 1'b0;
         csr_write_MEM <= 1'b0;
         csr_wmask_MEM <= 32'b0;
         ertn_flush_MEM <= 1'b0;
@@ -757,7 +757,7 @@ always @(posedge clk) begin
         csr_num_MEM <= csr_num_EX;
         ex_syscall_MEM <= ex_syscall_EX;
         code_MEM <= code_EX;
-        csr_MEM <= csr_EX;
+        csr_re_MEM <= csr_re_EX;
         csr_write_MEM <= csr_write_EX;
         csr_wmask_MEM <= csr_wmask_EX;
         ertn_flush_MEM <= ertn_flush_EX;
@@ -812,7 +812,7 @@ assign final_result_MEM = res_from_mem_MEM ? mem_result : result_all_MEM;
 reg [13:0] csr_num_WB;
 reg ex_syscall_WB;
 reg [14:0] code_WB;
-reg csr_WB;
+reg csr_re_WB;
 reg csr_write_WB;
 reg [31:0] csr_wmask_WB;
 reg ertn_flush_WB;
@@ -828,7 +828,7 @@ always @(posedge clk) begin
         csr_num_WB <= 14'b0;
         ex_syscall_WB <= 1'b0;
         code_WB <= 15'b0;
-        csr_WB <= 1'b0;
+        csr_re_WB <= 1'b0;
         csr_write_WB <= 1'b0;
         csr_wmask_WB <= 32'b0;
         ertn_flush_WB <= 1'b0;
@@ -843,7 +843,7 @@ always @(posedge clk) begin
         csr_num_WB <= csr_num_MEM;
         ex_syscall_WB <= ex_syscall_MEM;
         code_WB <= code_MEM;
-        csr_WB <= csr_MEM;
+        csr_re_WB <= csr_re_MEM;
         csr_write_WB <= csr_write_MEM;
         csr_wmask_WB <= csr_wmask_MEM;
         ertn_flush_WB <= ertn_flush_MEM;
@@ -873,7 +873,7 @@ assign reg_want_write_MEM = dest_MEM & {5{rf_we_MEM & valid_MEM}};
 
 assign rf_we    = rf_we_WB && valid_WB;
 assign rf_waddr = dest_WB;
-assign rf_wdata = final_result_WB;
+assign rf_wdata = csr_re_WB? csr_crmd_rvalue : final_result_WB;
 regfile u_regfile(
     .clk    (clk      ),
     .raddr1 (rf_raddr1),
@@ -904,8 +904,6 @@ assign ready_go_WB = 1'b1;
 assign reg_want_write_WB = dest_WB & {5{rf_we_WB & valid_WB}};
 
 //* CSR
-
-wire csr_re = 1'b1;
 wire wb_ex = ex_syscall_WB;
 wire [5:0] wb_ecode = ex_syscall_WB ? 6'hb : 6'h0;
 wire [8:0] wb_esubcode = ex_syscall_WB ? 9'h0 : 9'h0;
@@ -914,7 +912,7 @@ csr u_csr(
     .clk                (clk),
     .reset              (reset),
     
-    .csr_re             (csr_re),
+    .csr_re             (csr_re_WB),
     .csr_num            (csr_num_WB),
     .csr_rvalue         (csr_rvalue),
 
@@ -929,7 +927,7 @@ csr u_csr(
     .wb_ex              (wb_ex), // 来自WB级的异常触发信号
     .wb_ecode           (wb_ecode),
     .wb_esubcode        (wb_esubcode),
-    .wb_pc             (pc_WB)         // 来自WB级的异常发生地址
+    .wb_pc              (pc_WB)         // 来自WB级的异常发生地址
 );
 
 endmodule
