@@ -374,11 +374,11 @@ assign debug_wb_rf_wdata = rf_wdata;
 
 //--  Waterflow
 //IF, ID, EX, MEM, WB
-//--  Handshake       // 握手信号这里这个逻辑和我之前写的不一样 我不一定改的对
+//--  Handshake
 wire flush_all;
-assign flush_all = wb_ex | ertn_flush_EX;  // 是不是要或上 has_int ? 不然has_int没有用到
+assign flush_all = flush_all_WB;  
 
-assign allow_in_IF = (allow_in_ID && ready_go_IF)&valid; // 中断或ertn执行时重开流水线
+assign allow_in_IF = (allow_in_ID && ready_go_IF || flush_all)&valid; // 中断或ertn执行时重开流水线
 assign allow_in_ID = (allow_in_EX && ready_go_ID)&valid;
 assign allow_in_EX = (allow_in_MEM && ready_go_EX)&valid;
 assign allow_in_MEM = (allow_in_WB && ready_go_MEM)&valid;
@@ -388,7 +388,7 @@ assign allow_in_WB = ready_go_WB & valid;
 wire br_concel;
 
 assign seq_pc       = pc + 3'h4;
-assign nextpc       = wb_ex? ex_entry : (ertn_flush_EX? ertn_pc : (br_taken & valid_ID? br_target : seq_pc)); // 若中断，则进入中断处理入口；ertn 指令直到写回级才修改 CRMD，与此同时清空流水线并更新取指 PC。
+assign nextpc       = exception_WB? ex_entry : (ertn_flush_WB? ertn_pc : (br_taken & valid_ID? br_target : seq_pc)); // 若中断，则进入中断处理入口；ertn 指令直到写回级才修改 CRMD，与此同时清空流水线并更新取指 PC。
 assign inst_sram_en = 1'b1;
 assign inst_sram_addr = pc;
 
@@ -474,34 +474,18 @@ assign rf_rdata1_forward = result_forward[2]&{32{accept_forward1[2]}}|result_for
 assign rf_rdata2_forward = result_forward[2]&{32{accept_forward2[2]}}|result_forward[1]&{32{accept_forward2[1]}}|result_forward[0]&{32{accept_forward2[0]}};
 
 //decide to wait or not
-/*
-reg[31:0] reg_for_writeback;
-wire[31:0] reg_is_writing, reg_want_writing,rf_waddr_dec, dest_dec, reg_is_war;
-decoder_5_32 reg_dec(
-    .in(rf_waddr),
-    .out(rf_waddr_dec)
-);
-decoder_5_32 reg_dec2(
-    .in(dest),
-    .out(dest_dec)
-);
-assign reg_is_writing = rf_waddr_dec&{32{rf_we}};
-assign reg_want_writing = dest_dec&{32{valid_ID&gr_we&valid&dest!=5'd0&allow_in_EX&ready_go_ID}};
-
-always @(posedge clk) begin
-    if (reset) begin
-        reg_for_writeback <= 32'b0;
-    end
-    else begin 
-        reg_for_writeback <= (reg_for_writeback | reg_want_writing)&~reg_is_writing;
-    end
-end
-*/
 wire [4:0] reg_want_write_EX, reg_want_write_MEM, reg_want_write_WB;
 
 wire rf_rd1_in_war, rf_rd2_in_war;
 assign rf_rd1_in_war = (rf_raddr1 == reg_want_write_EX) || (rf_raddr1 == reg_want_write_MEM) || (rf_raddr1 == reg_want_write_WB);
 assign rf_rd2_in_war = (rf_raddr2 == reg_want_write_EX) || (rf_raddr2 == reg_want_write_MEM) || (rf_raddr2 == reg_want_write_WB);
+
+//war for csr
+wire [13:0] csr_want_write_EX, csr_want_write_MEM, csr_want_write_WB;
+wire csr_want_write_valid_EX, csr_want_write_valid_MEM, csr_want_write_valid_WB;
+wire reg_csr_in_war, used_regs;
+assign used_regs = (used_rj&&rf_rd1_nz || used_rkd&&rf_rd2_nz);
+assign reg_csr_in_war = used_regs && (csr_re_EX && valid_EX || csr_re_MEM && valid_MEM || csr_re_WB && valid_WB);
 
 //decide ready_go_ID
 wire used_rj,used_rkd;
@@ -511,10 +495,9 @@ assign used_rkd=~src2_is_imm|inst_st_w|inst_st_b|inst_st_h;
 // assign reg_is_war = reg_is_writing|reg_for_writeback;//当前正在写或者还没写回的寄存器
 assign ready_go_ID =   ~( (rf_rd1_in_war&used_rj&~rf_rd1_is_forward&rf_rd1_nz)
                       | (rf_rd2_in_war&used_rkd&~rf_rd2_is_forward&rf_rd2_nz)//If forward, then go.
-                      | (csr_re_EX & (used_rj | used_rkd) & & rf_rd1_nz & rf_rd2_nz)
-                      | (csr_re_MEM & (used_rj | used_rkd) & & rf_rd1_nz & rf_rd2_nz)) 
+                      | reg_csr_in_war) 
                       | ~valid_ID;
-                      //| ~ertn_flush_EX | ~wb_ex ;
+                      //| ~ertn_flush_EX | ~exception_WB ;
                       //| ~has_int;  产生int时要把中断信息传下去，而不是直接重开流水线
 // end WAR
 
@@ -526,6 +509,7 @@ reg csr_re_EX;
 reg csr_write_EX;
 reg [31:0] csr_wmask_EX;
 reg ertn_flush_EX;
+reg flush_all_EX;
 
 always @(posedge clk) begin
     if (reset) begin
@@ -561,6 +545,8 @@ always @(posedge clk) begin
         csr_write_EX <= 1'b0;
         csr_wmask_EX <= 32'b0;
         ertn_flush_EX <= 1'b0;
+
+        flush_all_EX <= 1'b0;
     end
     else if(allow_in_ID)begin
         alu_src1_EX <= alu_src1;
@@ -595,6 +581,8 @@ always @(posedge clk) begin
         csr_write_EX <= inst_csrwr || inst_csrxchg;
         csr_wmask_EX <= inst_csrxchg ? rj_value : {32{inst_csrwr}};  //mask <-- rj
         ertn_flush_EX <= inst_ertn;
+
+        flush_all_EX <= inst_ertn | inst_syscall;//该条指令后清空流水线 // 是不是要或上 has_int ? 不然has_int没有用到 //! @wml
     end
 end
 
@@ -715,6 +703,7 @@ reg csr_write_MEM;
 reg [31:0] csr_wmask_MEM;
 reg ertn_flush_MEM;
 reg [31:0] csr_wvalue_MEM;
+reg flush_all_MEM;
 
 always @(posedge clk) begin
     if (reset) begin
@@ -739,6 +728,8 @@ always @(posedge clk) begin
         csr_wmask_MEM <= 32'b0;
         ertn_flush_MEM <= 1'b0;
         csr_wvalue_MEM <= 32'b0;
+
+        flush_all_MEM <= 1'b0;
     end
     else if(allow_in_EX)begin
         res_from_mem_MEM <= res_from_mem_EX;
@@ -762,6 +753,8 @@ always @(posedge clk) begin
         csr_wmask_MEM <= csr_wmask_EX;
         ertn_flush_MEM <= ertn_flush_EX;
         csr_wvalue_MEM <= rkd_value_EX;
+
+        flush_all_MEM <= flush_all_EX;
     end
 end
 
@@ -787,7 +780,8 @@ assign ready_go_EX = if_divider_EX && valid_EX ? (unsigned_dout_tvalid || signed
 
 //-- MEM stage
 
-assign data_sram_en    = (mem_we_EX || res_from_mem_EX) && valid && valid_EX && ready_go_EX; //实际上要有EX的寄存器发请求，MEM才能接受
+assign data_sram_en    = (mem_we_EX || res_from_mem_EX) && valid && valid_EX && ready_go_EX //实际上要有EX的寄存器发请求，MEM才能接受
+                         && ~(flush_all_MEM||flush_all_WB);//正在刷新流水线时不发请求
 // assign data_sram_we    = mem_we_EX? {{2{mem_word_EX}}, mem_half_EX | mem_word_EX, 1'b1}  
 //                             : 4'b0;
 assign data_sram_we    = mem_we_EX? {mem_word_EX|(mem_half_EX&mem_offset[1])|(mem_byte_EX&mem_offset[1]&mem_offset[0])
@@ -818,6 +812,8 @@ reg [31:0] csr_wmask_WB;
 reg ertn_flush_WB;
 reg [31:0] csr_wvalue_WB;
 
+reg flush_all_WB;
+
 always @(posedge clk) begin
     if (reset) begin
         final_result_WB <= 32'b0;
@@ -833,6 +829,8 @@ always @(posedge clk) begin
         csr_wmask_WB <= 32'b0;
         ertn_flush_WB <= 1'b0;
         csr_wvalue_WB <= 32'b0;
+
+        flush_all_WB <= 1'b0;
     end
     else if(allow_in_MEM) begin
         final_result_WB <= final_result_MEM;
@@ -848,6 +846,8 @@ always @(posedge clk) begin
         csr_wmask_WB <= csr_wmask_MEM;
         ertn_flush_WB <= ertn_flush_MEM;
         csr_wvalue_WB <= csr_wvalue_MEM;
+
+        flush_all_WB <= flush_all_MEM;
     end
 end
 
@@ -870,10 +870,10 @@ assign ready_go_MEM = 1'b1;
 assign reg_want_write_MEM = dest_MEM & {5{rf_we_MEM & valid_MEM}};
 
 //-- WB stage
-
+wire [31:0] csr_rvalue;
 assign rf_we    = rf_we_WB && valid_WB;
 assign rf_waddr = dest_WB;
-assign rf_wdata = csr_re_WB? csr_crmd_rvalue : final_result_WB;
+assign rf_wdata = csr_re_WB? csr_rvalue : final_result_WB;
 regfile u_regfile(
     .clk    (clk      ),
     .raddr1 (rf_raddr1),
@@ -904,27 +904,28 @@ assign ready_go_WB = 1'b1;
 assign reg_want_write_WB = dest_WB & {5{rf_we_WB & valid_WB}};
 
 //* CSR
-wire wb_ex = ex_syscall_WB;
+wire exception_WB = ex_syscall_WB;
 wire [5:0] wb_ecode = ex_syscall_WB ? 6'hb : 6'h0;
 wire [8:0] wb_esubcode = ex_syscall_WB ? 9'h0 : 9'h0;
+wire [31:0] ex_entry, ertn_pc;
 
 csr u_csr(
     .clk                (clk),
-    .reset              (reset),
+    .rst              (reset),
     
     .csr_re             (csr_re_WB),
     .csr_num            (csr_num_WB),
     .csr_rvalue         (csr_rvalue),
 
-    .csr_we             (csr_write_WB),
+    .csr_we             (csr_write_WB&&valid_WB),
     .csr_wmask          (csr_wmask_WB),
     .csr_wvalue         (csr_wvalue_WB),
 
     .ex_entry           (ex_entry),      // 送往pre-IF级的异常处理地址
     .has_int            (has_int),       // 送往 ID 级的中断有效信号
     .ertn_pc            (ertn_pc),       // 送往pre-IF级的异常返回地址
-    .ertn_flush         (ertn_flush_WB), // 来自WB级的ertn执行的有效信号
-    .wb_ex              (wb_ex), // 来自WB级的异常触发信号
+    .ertn_flush         (ertn_flush_WB&&valid_WB), // 来自WB级的ertn执行的有效信号
+    .wb_ex              (exception_WB&&valid_WB), // 来自WB级的异常触发信号
     .wb_ecode           (wb_ecode),
     .wb_esubcode        (wb_esubcode),
     .wb_pc              (pc_WB)         // 来自WB级的异常发生地址
