@@ -98,7 +98,7 @@ wire        inst_csrwr;
 wire        inst_csrxchg;
 wire        inst_ertn;
 wire        inst_syscall;
-wire        isnt_break;
+wire        inst_break;
 
 wire        need_ui5;
 wire        need_si12;
@@ -450,7 +450,6 @@ assign pc_IF=pc;
 
 //-- ID stage
 
-//* WAR  // 需要添加 CSR 的阻塞
 //inst save for wait
 reg[31:0] inst_reg;
 
