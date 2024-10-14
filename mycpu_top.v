@@ -438,7 +438,7 @@ always @(posedge clk) begin
     else if(allow_in_IF) begin
         pc_ID <= pc;
         exc_adef_ID <= IF_ADEF;
-        flush_all_ID <= IF_ADEF;
+        flush_all_ID <= IF_ADEF&&~(flush_all_ID||flush_all_EX||flush_all_MEM||flush_all_WB);
     end
 end
 
