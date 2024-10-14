@@ -242,10 +242,6 @@ wire csr_ticlr_clr;
 assign csr_ticlr_clr = 1'b0;
 wire [31:0] csr_ticlr_rvalue = {29'b0, csr_ticlr_clr};
 
-//--csr_stable_counter
-wire [63:0] csr_stable_counter;
-reg [63:0] csr_stable_counter;
-
 //-- rvalue
 
 assign csr_rvalue = {32{csr_num==`CSR_CRMD}} & csr_crmd_rvalue
