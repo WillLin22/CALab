@@ -410,7 +410,7 @@ assign allow_in_WB = ready_go_WB & valid;
 wire br_concel;
 
 assign seq_pc       = pc + 3'h4;
-assign nextpc       = exception_WB&&valid_WB ? ex_entry : (ertn_flush_WB&&valid_WB? ertn_pc : (br_taken & valid_ID? br_target : seq_pc)); // 若中断，则进入中断处理入口；ertn 指令直到写回级才修改 CRMD，与此同时清空流水线并更新取指 PC。
+assign nextpc       = exception_WB&&flush_all ? ex_entry : (ertn_flush_WB? ertn_pc : (br_taken & valid_ID? br_target : seq_pc)); // 若中断，则进入中断处理入口；ertn 指令直到写回级才修改 CRMD，与此同时清空流水线并更新取指 PC。
 assign inst_sram_en = ~IF_ADEF;
 assign inst_sram_addr = pc;
 
@@ -627,7 +627,7 @@ always @(posedge clk) begin
     if (reset) begin
         valid_ID <= 1'b0;
     end
-    else if(flush_all||flush_all_EX||flush_all_MEM||flush_all_ID||ex_ID) // 中断异常，则取消流水级
+    else if(flush_all||flush_all_EX||flush_all_MEM||flush_all_ID||ex_ID&&allow_in_ID) // 中断异常，则取消流水级
         valid_ID <= 1'b0;
     else if(br_taken && valid_ID && ready_go_ID) begin //只有IF取了错指令，而且ID指令有效，而且EX准备接受，才把valid=0传下去
         valid_ID <= 1'b0;
@@ -822,7 +822,7 @@ always @(posedge clk) begin
     if (reset) begin
         valid_EX <= 1'b0;
     end
-    else if (flush_all||INE_ID) 
+    else if (flush_all||INE_ID&&allow_in_EX) 
         valid_EX <= 1'b0;
     else if(allow_in_EX) begin
         valid_EX <= valid_ID && ready_go_ID;
@@ -936,7 +936,7 @@ always @(posedge clk) begin
     else if(flush_all)
         valid_MEM <= 1'b0;
     else if(allow_in_MEM) begin
-        valid_MEM <= valid_EX && ready_go_EX;
+        valid_MEM <= valid_EX && ready_go_EX&&~ALE_EX;
     end
 end
 
@@ -967,7 +967,7 @@ always @(posedge clk) begin
     else if (flush_all)
         valid_WB <= 1'b0;
     else if (allow_in_WB) begin
-        valid_WB <= valid_MEM && ready_go_MEM;
+        valid_WB <= valid_MEM && ready_go_MEM ;
     end
 end
 
@@ -980,7 +980,7 @@ assign reg_want_write_WB = dest_WB & {5{rf_we_WB & valid_WB}};
 
 //* CSR
 wire exception_WB = ex_syscall_WB|exc_int_WB|exc_adef_WB|exc_ine_WB|exc_ale_WB|exc_break_WB;
-assign flush_all = flush_all_WB;  
+assign flush_all = flush_all_WB; 
 
 wire [5:0] wb_ecode = exc_int_WB ? `ECODE_INT :
                       exc_adef_WB? `ECODE_ADE :
@@ -1008,7 +1008,7 @@ csr u_csr(
     .has_int            (has_int),       // 送往 ID 级的中断有效信号
     .ertn_pc            (ertn_pc),       // 送往pre-IF级的异常返回地址
     .ertn_flush         (ertn_flush_WB&valid_WB), // 来自WB级的ertn执行的有效信号
-    .wb_ex              (exception_WB), // 来自WB级的异常触发信号
+    .wb_ex              (exception_WB&flush_all), // 来自WB级的异常触发信号
     .wb_ecode           (wb_ecode),
     .wb_esubcode        (wb_esubcode),
     .wb_pc              (pc_WB),         // 来自WB级的异常发生地址
