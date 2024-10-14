@@ -140,13 +140,28 @@ wire [15:0] mem_rdata_h;
 wire [ 7:0] mem_rdata_b;
 wire [31:0] mem_result;
 
-//* CSR-relevant signals
+//* CSR模块接口
 wire exception_WB;
 wire flush_all;
+wire csr_re; 
+wire [13:0]csr_num; 
 wire [31:0] csr_rvalue;
+wire csr_we; 
+wire [31:0]csr_wmask; 
+wire [31:0] csr_wvalue; 
+wire [31:0] ex_entry;// 送往pre-IF级的异常处理地址
+wire has_int;// 送往 ID 级的中断有效信号
+wire [31:0] ertn_pc;// 送往pre-IF级的异常返回地址
+wire ertn_flush;// 来自WB级的ertn执行的有效信号
+wire wb_ex;//来自wb级的异常触发信号 
 wire [5:0] wb_ecode;
 wire [8:0] wb_esubcode;
-wire [31:0] ex_entry, ertn_pc;
+wire [31:0] wb_pc;// 来自WB级的异常发生地址
+wire [31:0] wb_vaddr;// 来自WB级的异常发生地址
+
+wire dst_is_rj;//寄存器写目标是否是rj，专为rdcntid指令设计，用于修改dest变量
+
+reg [63:0] csr_stable_counter;//一个从0开始每周期+1的计数器
 
 //新的定义的线或接口的声明写这里
 
@@ -357,9 +372,11 @@ assign src2_is_imm   = inst_slli_w |
 
 assign res_from_mem  = inst_ld_w |inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu;
 assign dst_is_r1     = inst_bl;
+assign dst_is_rj     = inst_rdcntid;
 assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b & ~inst_st_b & ~inst_st_h & ~inst_bge & ~inst_bgeu & ~inst_blt & ~inst_bltu & ~inst_ertn; // exp12 csr 指令中只有 ertn 不写寄存器
 assign mem_we        = inst_st_w|inst_st_b|inst_st_h;
-assign dest          = dst_is_r1 ? 5'd1 : rd;
+assign dest          = dst_is_r1 ? 5'd1 : 
+                      dst_is_rj ? rj : rd;
 
 wire [31:0] data_sram_wdata_ID;
 assign data_sram_wdata_ID = rkd_value;
@@ -973,36 +990,46 @@ assign reg_want_write_WB = dest_WB & {5{rf_we_WB & valid_WB}};
 assign exception_WB = exc_syscall_WB|exc_int_WB|exc_adef_WB|exc_ine_WB|exc_ale_WB|exc_break_WB;
 assign flush_all = flush_all_WB; 
 
+assign csr_re = csr_re_WB;
+assign csr_num = csr_num_WB;
+assign csr_we = csr_write_WB && valid_WB;
+assign csr_wmask = csr_wmask_WB;
+assign csr_wvalue = csr_wvalue_WB;
+
+assign ertn_flush = ertn_flush_WB & valid_WB;
+assign wb_ex = exception_WB & flush_all;// 来自WB级的异常触发信号
 assign wb_ecode = exc_int_WB ? `ECODE_INT :
                       exc_adef_WB? `ECODE_ADE :
                       exc_ale_WB ? `ECODE_ALE :
                       exc_syscall_WB? `ECODE_SYS:
                       exc_break_WB? `ECODE_BRK :
                       exc_ine_WB ? `ECODE_INE : 5'b0;
-
 assign wb_esubcode = exc_adef_WB ? `ESUBCODE_ADEF : 9'h0;
+assign wb_pc = pc_WB;// 来自WB级的异常发生地址
+assign wb_vaddr = vaddr_WB;// 来自WB级的异常发生地址
+
 
 csr u_csr(
     .clk                (clk),
     .rst              (reset),
     
-    .csr_re             (csr_re_WB),
-    .csr_num            (csr_num_WB),
+    .csr_re             (csr_re),
+    .csr_num            (csr_num),
     .csr_rvalue         (csr_rvalue),
 
-    .csr_we             (csr_write_WB&&valid_WB),
-    .csr_wmask          (csr_wmask_WB),
-    .csr_wvalue         (csr_wvalue_WB),
+    .csr_we             (csr_we),
+    .csr_wmask          (csr_wmask),
+    .csr_wvalue         (csr_wvalue),
 
-    .ex_entry           (ex_entry),      // 送往pre-IF级的异常处理地址
-    .has_int            (has_int),       // 送往 ID 级的中断有效信号
-    .ertn_pc            (ertn_pc),       // 送往pre-IF级的异常返回地址
-    .ertn_flush         (ertn_flush_WB&valid_WB), // 来自WB级的ertn执行的有效信号
-    .wb_ex              (exception_WB&flush_all), // 来自WB级的异常触发信号
+    .ex_entry           (ex_entry),      
+    .has_int            (has_int),       
+    .ertn_pc            (ertn_pc),       
+    .ertn_flush         (ertn_flush), 
+    .wb_ex              (wb_ex), 
     .wb_ecode           (wb_ecode),
     .wb_esubcode        (wb_esubcode),
-    .wb_pc              (pc_WB),         // 来自WB级的异常发生地址
-    .wb_vaddr           (vaddr_WB)    // 来自WB级的异常发生地址
+    .wb_pc              (wb_pc),         
+    .wb_vaddr           (wb_vaddr)    
 );
 
 endmodule
