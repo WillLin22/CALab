@@ -21,7 +21,9 @@ module csr(
     input wire   wb_ex,        // 来自WB级的异常触发信号
     input wire   [5:0] wb_ecode,  // 来自WB级的异常类型1级码
     input wire   [8:0] wb_esubcode, // 来自WB级的异常类型2级码
-    input wire   [31:0] wb_pc // 来自WB级的异常发生地址
+    input wire   [31:0] wb_pc, // 来自WB级的异常发生地址
+
+    input wire   [31:0] wb_vaddr // 来自WB级的访存地址
 );
 
 /* ------------------ CRMD 当前模式信息 ------------------*/
@@ -53,6 +55,7 @@ always @(posedge clk) begin
                        | ~csr_wmask[`CSR_CRMD_PIE] & csr_crmd_ie;
     end
 end
+
 
 // 目前处理器仅支持直接地址翻译模式，所以CRMD 的 DA、PG、DATF、DATM 域可以暂时置为常值。
 assign csr_crmd_da = 1'b1;
@@ -105,12 +108,11 @@ always @(posedge clk) begin
     csr_estat_is[ 10] <= 1'b0;
 
     csr_estat_is[ 11] <= 1'b0;
-    // if (timer_cnt[31:0] == 32'b0) begin
-    //     csr_estat_is[11] <= 1'b1;
-    // end
-    // else if (csr_we && csr_num == `CSR_TICLR && csr_wmask[`CSR_TICLR_CLR] 
-    //         && csr_wvalue[`CSR_TICLR_CLR]) 
-    //     csr_estat_is[11] <= 1'b0;
+    if (timer_cnt[31:0] == 32'b0) begin
+        csr_estat_is[11] <= 1'b1;
+    end
+    else if (csr_we && csr_num == `CSR_TICLR && csr_wmask[`CSR_TICLR_CLR] && csr_wvalue[`CSR_TICLR_CLR]) 
+        csr_estat_is[11] <= 1'b0;
 
     // csr_estat_is[ 12] <= ipi_int_in;
     csr_estat_is[ 12] <= 1'b0;  // 核间中断
@@ -172,20 +174,91 @@ wire [31:0] csr_save1_rvalue = csr_save1_data;
 wire [31:0] csr_save2_rvalue = csr_save2_data;
 wire [31:0] csr_save3_rvalue = csr_save3_data;
 
+wire[31:0] csr_badv_rvalue, csr_tid_rvalue, csr_tcfg_rvalue, csr_tval_rvalue;
+
+//-- csr_badv
+
+wire wb_ex_addr_err = wb_ecode==`ECODE_ADE ||wb_ecode==`ECODE_ALE;
+reg[31:0] csr_badv_vaddr;
+
+always @(posedge clk) begin
+    if (wb_ex && wb_ex_addr_err) begin  
+        csr_badv_vaddr <= (wb_ecode==`ECODE_ADE &&
+        wb_esubcode==`ESUBCODE_ADEF) ? wb_pc : wb_vaddr;
+    end
+end
+
+assign csr_badv_rvalue = csr_badv_vaddr;
+
+//-- csr_tid
+
+reg[31:0] csr_tid_tid;
+wire[31:0] coreid_in = 0;
+
+always @(posedge clk) begin
+    if (rst)
+        csr_tid_tid <= coreid_in;
+    else if (csr_we && csr_num==`CSR_TID)
+        csr_tid_tid <= csr_wmask[`CSR_TID_TID]&csr_wvalue[`CSR_TID_TID]| ~csr_wmask[`CSR_TID_TID]&csr_tid_tid;
+end
+
+assign csr_tid_rvalue = csr_tid_tid;
+
+//-- csr_tcfg
+reg csr_tcfg_en;
+reg csr_tcfg_periodic;
+reg[29:0] csr_tcfg_initval;
+always @(posedge clk) begin
+    if (rst)
+        csr_tcfg_en <= 1'b0;
+    else if (csr_we && csr_num==`CSR_TCFG)
+        csr_tcfg_en <= csr_wmask[`CSR_TCFG_EN]&csr_wvalue[`CSR_TCFG_EN] | ~csr_wmask[`CSR_TCFG_EN]&csr_tcfg_en;
+    if (csr_we && csr_num==`CSR_TCFG) begin
+        csr_tcfg_periodic <= csr_wmask[`CSR_TCFG_PERIOD]&csr_wvalue[`CSR_TCFG_PERIOD] | ~csr_wmask[`CSR_TCFG_PERIOD]&csr_tcfg_periodic;
+        csr_tcfg_initval <= csr_wmask[`CSR_TCFG_INITV]&csr_wvalue[`CSR_TCFG_INITV] | ~csr_wmask[`CSR_TCFG_INITV]&csr_tcfg_initval;
+    end
+end
+assign csr_tcfg_rvalue = {csr_tcfg_initval, csr_tcfg_periodic, csr_tcfg_en};
+//--csr_tval
+wire [31:0] tcfg_next_value;
+reg [31:0] timer_cnt;
+assign tcfg_next_value = csr_wmask[31:0]&csr_wvalue[31:0] | ~csr_wmask[31:0]&{csr_tcfg_initval, csr_tcfg_periodic, csr_tcfg_en};
+always @(posedge clk) begin
+    if (rst)
+        timer_cnt <= 32'hffffffff;
+    else if (csr_we && csr_num==`CSR_TCFG && tcfg_next_value[`CSR_TCFG_EN])
+        timer_cnt <= {tcfg_next_value[`CSR_TCFG_INITV], 2'b0};
+    else if (csr_tcfg_en && timer_cnt!=32'hffffffff) begin
+        if (timer_cnt[31:0]==32'b0 && csr_tcfg_periodic)
+            timer_cnt <= {csr_tcfg_initval, 2'b0};
+        else
+            timer_cnt <= timer_cnt - 1'b1;
+    end
+end
+assign csr_tval_rvalue = timer_cnt[31:0];
+
+//--csr_ticlr
+wire csr_ticlr_clr;
+assign csr_ticlr_clr = 1'b0;
+wire [31:0] csr_ticlr_rvalue = {29'b0, csr_ticlr_clr};
+
+//-- rvalue
+
 assign csr_rvalue = {32{csr_num==`CSR_CRMD}} & csr_crmd_rvalue
                   | {32{csr_num==`CSR_PRMD}} & csr_prmd_rvalue
                   | {32{csr_num==`CSR_ECFG}} & csr_ecfg_rvalue
                   | {32{csr_num==`CSR_ESTAT}} & csr_estat_rvalue
                   | {32{csr_num==`CSR_ERA}} & csr_era_rvalue
-                //  | {32{csr_num==`CSR_BADV}} & csr_badv_rvalue
+                 | {32{csr_num==`CSR_BADV}} & csr_badv_rvalue
                   | {32{csr_num==`CSR_EENTRY}} & csr_eentey_rvalue
                   | {32{csr_num==`CSR_SAVE0}} & csr_save0_rvalue
                   | {32{csr_num==`CSR_SAVE1}} & csr_save1_rvalue
                   | {32{csr_num==`CSR_SAVE2}} & csr_save2_rvalue
-                  | {32{csr_num==`CSR_SAVE3}} & csr_save3_rvalue;
-                //  | {32{csr_num==`CSR_TID}} & csr_tid_rvalue
-                //  | {32{csr_num==`CSR_TCFG}} & csr_tcfg_rvalue
-                //  | {32{csr_num==`CSR_TVAL}} & csr_tval_rvalue;
+                  | {32{csr_num==`CSR_SAVE3}} & csr_save3_rvalue
+                 | {32{csr_num==`CSR_TID}} & csr_tid_rvalue
+                 | {32{csr_num==`CSR_TCFG}} & csr_tcfg_rvalue
+                 | {32{csr_num==`CSR_TVAL}} & csr_tval_rvalue
+                 | {32{csr_num==`CSR_TICLR}} & csr_ticlr_rvalue;
 
 assign has_int = (|(csr_estat_is[11:0] & csr_ecfg_lie[11:0])) & csr_crmd_ie; // 送往ID级的中断有效信号 中断的使能情况分两个层次：低层次是与各中断一一对应的局部中断使能，通过 ECFG 控制寄存器的 LIE（Local Interrupt Enable）域的 11, 9..0 位来控制；高层次是全局中断使能，通过 CRMD 控制状态寄存器的 IE（Interrupt Enable）位来控制。
 assign ex_entry = csr_eentey_rvalue; // 送往pre-IF级的异常处理入口地址

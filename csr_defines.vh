@@ -64,8 +64,8 @@
 
 //CSR_TCFG
 `define CSR_TCFG_EN 0
-`define CSR_TCFG_PERIODIC 1
-`define CSR_TCFG_INITVAL 31:2
+`define CSR_TCFG_PERIOD 1
+`define CSR_TCFG_INITV 31:2
 
 //CSR_TICLR
 `define CSR_TICLR_CLR 0
@@ -73,6 +73,22 @@
 
 
 //ECODE
-
+`define ECODE_INT 6'h0
+`define ECODE_PIL 6'h1
+`define ECODE_PIS 6'h2
+`define ECODE_PIF 6'h3
+`define ECODE_PME 6'h4
+`define ECODE_PPI 6'h7
+`define ECODE_ADE 6'h8
+`define ECODE_ALE 6'h9
+`define ECODE_SYS 6'hB
+`define ECODE_BRK 6'hC
+`define ECODE_INE 6'hD
+`define ECODE_IPE 6'hE
+`define ECODE_FPD 6'hF 
+`define ECODE_FPE 6'h12
+`define ECODE_TLBR 6'h3F
 
 //ESUBCODE
+`define ESUBCODE_ADEF 9'h0
+`define ESUBCODE_ADEM 9'h1
