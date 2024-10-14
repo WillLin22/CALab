@@ -107,7 +107,7 @@ always @(posedge clk) begin
     csr_estat_is[9:2] <= 8'b0;
     csr_estat_is[ 10] <= 1'b0;
 
-    csr_estat_is[ 11] <= 1'b0;
+    // csr_estat_is[ 11] <= 1'b0;
     if (timer_cnt[31:0] == 32'b0) begin
         csr_estat_is[11] <= 1'b1;
     end
