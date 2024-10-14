@@ -14,6 +14,8 @@
 `define CSR_TCFG 14'h41
 `define CSR_TVAL 14'h42
 `define CSR_TICLR 14'h44
+`define CSR_STABLE_COUNTER_HI 14'h45
+`define CSR_STABLE_COUNTER_LO 14'h46
 
 
 //CSR分区

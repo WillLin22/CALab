@@ -144,14 +144,14 @@ wire [31:0] mem_result;
 wire exception_WB;
 wire flush_all;
 wire csr_re; 
-wire [13:0]csr_num; 
-wire [31:0] csr_rvalue;
+wire [13:0]csr_num; //input,目标csr编号
+wire [31:0] csr_rvalue;//output,csr读取的值
 wire csr_we; 
 wire [31:0]csr_wmask; 
 wire [31:0] csr_wvalue; 
-wire [31:0] ex_entry;// 送往pre-IF级的异常处理地址
-wire has_int;// 送往 ID 级的中断有效信号
-wire [31:0] ertn_pc;// 送往pre-IF级的异常返回地址
+wire [31:0] ex_entry;// output,送往pre-IF级的异常处理地址
+wire has_int;// output,送往 ID 级的中断有效信号
+wire [31:0] ertn_pc;// output,送往pre-IF级的异常返回地址
 wire ertn_flush;// 来自WB级的ertn执行的有效信号
 wire wb_ex;//来自wb级的异常触发信号 
 wire [5:0] wb_ecode;
@@ -161,7 +161,8 @@ wire [31:0] wb_vaddr;// 来自WB级的异常发生地址
 
 wire dst_is_rj;//寄存器写目标是否是rj，专为rdcntid指令设计，用于修改dest变量
 
-reg [63:0] csr_stable_counter;//一个从0开始每周期+1的计数器
+wire csrr_is_rdcnts;//csr读指令是否是rdcnts指令，用于修改csr_num_EX
+wire [13:0] csrr_rdcnts_num;//rdcnts指令的csr_num
 
 //新的定义的线或接口的声明写这里
 
@@ -299,7 +300,7 @@ assign inst_syscall = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & o
 assign inst_break = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h14];
 assign inst_rdcntid = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h0] & (inst[14:10] == 5'b11000) & (inst[4:0] == 5'b00000);
 assign inst_rdcntvl_w = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h0] & (inst[14:10] == 5'b11000) & (inst[9:5] == 5'b00000);
-assign inst_rdcntvl_w = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h0] & (inst[14:10] == 5'b11001) & (inst[9:5] == 5'b00000);
+assign inst_rdcntvh_w = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h0] & (inst[14:10] == 5'b11001) & (inst[9:5] == 5'b00000);
 
 
 
@@ -632,10 +633,10 @@ always @(posedge clk) begin
         inst_mod_w_EX <= inst_mod_w;
         inst_mod_wu_EX <= inst_mod_wu;
 
-        csr_num_EX <= inst[23:10];
+        csr_num_EX <= csrr_is_rdcnts ? csrr_rdcnts_num : inst[23:10];
         exc_syscall_EX <= inst_syscall;
         code_EX <= inst[14:0];
-        csr_re_EX <= inst_csrrd | inst_csrwr | inst_csrxchg;
+        csr_re_EX <= inst_csrrd | inst_csrwr | inst_csrxchg | inst_rdcntid | inst_rdcntvl_w | inst_rdcntvh_w;
         csr_write_EX <= inst_csrwr || inst_csrxchg;
         csr_wmask_EX <= inst_csrxchg ? rj_value : {32{inst_csrwr}};  //mask <-- rj
 
@@ -1007,8 +1008,6 @@ assign wb_ecode = exc_int_WB ? `ECODE_INT :
 assign wb_esubcode = exc_adef_WB ? `ESUBCODE_ADEF : 9'h0;
 assign wb_pc = pc_WB;// 来自WB级的异常发生地址
 assign wb_vaddr = vaddr_WB;// 来自WB级的异常发生地址
-
-
 csr u_csr(
     .clk                (clk),
     .rst              (reset),
@@ -1031,5 +1030,10 @@ csr u_csr(
     .wb_pc              (wb_pc),         
     .wb_vaddr           (wb_vaddr)    
 );
+
+assign csrr_is_rdcnts = inst_rdcntid | inst_rdcntvl_w | inst_rdcntvh_w;
+assign csrr_rdcnts_num = {14{inst_rdcntid}} & CSR_TID | 
+                         {14{inst_rdcntvl_w}} & CSR_STABLE_COUNTER_VL  | 
+                         {14{inst_rdcntvh_w}} & CSR_STABLE_COUNTER_VH;
 
 endmodule

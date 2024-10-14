@@ -242,6 +242,17 @@ wire csr_ticlr_clr;
 assign csr_ticlr_clr = 1'b0;
 wire [31:0] csr_ticlr_rvalue = {29'b0, csr_ticlr_clr};
 
+//--csr_stable_counter
+reg [63:0] csr_stable_counter;
+always @(posedge clk) begin
+    if (rst)
+        csr_stable_counter <= 64'h0;
+    else
+        csr_stable_counter <= csr_stable_counter + 1'b1;
+end
+wire [31:0] csr_stable_counter_hvalue = csr_stable_counter[63:32];
+wire [31:0] csr_stable_counter_lvalue = csr_stable_counter[31:0];
+
 //-- rvalue
 
 assign csr_rvalue = {32{csr_num==`CSR_CRMD}} & csr_crmd_rvalue
@@ -258,7 +269,9 @@ assign csr_rvalue = {32{csr_num==`CSR_CRMD}} & csr_crmd_rvalue
                  | {32{csr_num==`CSR_TID}} & csr_tid_rvalue
                  | {32{csr_num==`CSR_TCFG}} & csr_tcfg_rvalue
                  | {32{csr_num==`CSR_TVAL}} & csr_tval_rvalue
-                 | {32{csr_num==`CSR_TICLR}} & csr_ticlr_rvalue;
+                 | {32{csr_num==`CSR_TICLR}} & csr_ticlr_rvalue
+                 | {32{csr_num==`CSR_STABLE_COUNTER_HI}} & csr_stable_counter_hvalue
+                    | {32{csr_num==`CSR_STABLE_COUNTER_LO}} & csr_stable_counter_lvalue;
 
 assign has_int = (|(csr_estat_is[11:0] & csr_ecfg_lie[11:0])) & csr_crmd_ie; // 送往ID级的中断有效信号 中断的使能情况分两个层次：低层次是与各中断一一对应的局部中断使能，通过 ECFG 控制寄存器的 LIE（Local Interrupt Enable）域的 11, 9..0 位来控制；高层次是全局中断使能，通过 CRMD 控制状态寄存器的 IE（Interrupt Enable）位来控制。
 assign ex_entry = csr_eentey_rvalue; // 送往pre-IF级的异常处理入口地址
