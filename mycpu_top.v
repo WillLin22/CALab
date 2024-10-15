@@ -73,6 +73,7 @@ wire [15:0] op_25_22_d;
 wire [ 3:0] op_21_20_d;
 wire [31:0] op_19_15_d;
 
+//-- inst
 wire        inst_add_w;
 wire        inst_sub_w;
 wire        inst_slt;
@@ -93,7 +94,6 @@ wire        inst_bl;
 wire        inst_beq;
 wire        inst_bne;
 wire        inst_lu12i_w;
-//--  new instr
 wire inst_slti, inst_sltui, inst_andi, inst_ori,
      inst_xori, inst_sll_w, inst_srl_w, inst_sra_w, inst_pcaddu12i,
      inst_mul_w, inst_mulh_w, inst_mulh_wu, inst_div_w, inst_mod_w,
@@ -168,12 +168,12 @@ wire [13:0] csrr_rdcnts_num;//rdcnts指令的csr_num
 
 
 //--  water flow control regs
-
+//* allow_ready
 wire allow_in_IF,allow_in_ID,allow_in_EX,allow_in_MEM,allow_in_WB;//是否允许进入下一级流水段
 wire ready_go_IF,ready_go_ID,ready_go_EX,ready_go_MEM,ready_go_WB;//是否准备好接受新指令
 wire valid_IF;
 reg valid_ID,valid_EX,valid_MEM,valid_WB;
-
+//* data
 wire [31:0] pc_IF;
 reg [31:0] pc_ID;
 reg [31:0] alu_src1_EX, alu_src2_EX, rj_value_EX, rkd_value_EX, data_sram_wdata_EX, pc_EX, br_target_EX;
@@ -200,13 +200,15 @@ reg[1:0] mem_offset_MEM;
 
 reg inst_div_w_EX, inst_div_wu_EX, inst_mod_w_EX, inst_mod_wu_EX;
 //异常处理相关数据通路
+//* excs
 reg flush_all_ID;
-reg exc_adef_ID,        exc_adef_EX,        exc_adef_MEM,   exc_adef_WB;
-reg exc_ine_EX,         exc_ine_MEM,        exc_ine_WB;
-reg exc_int_EX,         exc_int_MEM,        exc_int_WB;
-reg exc_ale_MEM,        exc_ale_WB;
-reg exc_break_EX,       exc_break_MEM,      exc_break_WB;
-reg exc_syscall_EX,     exc_syscall_MEM,    exc_syscall_WB;
+reg exc_adef_ID,        exc_adef_EX,        exc_adef_MEM,   exc_adef_WB;//取指错
+reg exc_ine_EX,         exc_ine_MEM,        exc_ine_WB;//指令不存在
+reg exc_int_EX,         exc_int_MEM,        exc_int_WB;//中断
+reg exc_ale_MEM,        exc_ale_WB;//访存异常
+reg exc_break_EX,       exc_break_MEM,      exc_break_WB;//inst_break
+reg exc_syscall_EX,     exc_syscall_MEM,    exc_syscall_WB;//inst_syscall
+//* csr
 reg [13:0] csr_num_EX,  csr_num_MEM,        csr_num_WB;
 reg [14:0] code_EX,     code_MEM,           code_WB;
 reg csr_re_EX,          csr_re_MEM,         csr_re_WB;
@@ -465,7 +467,7 @@ end
 
 
 //-- IF stage
-wire IF_ADEF = |pc[1:0];
+wire IF_ADEF = |pc[1:0];//取指错误：pc非对齐
 
 always @(posedge clk) begin
     if (reset) begin
@@ -476,11 +478,11 @@ always @(posedge clk) begin
     else if(allow_in_IF) begin
         pc_ID <= pc;
         exc_adef_ID <= IF_ADEF;
-        flush_all_ID <= IF_ADEF&&~(flush_all_ID||flush_all_EX||flush_all_MEM||flush_all_WB);
+        flush_all_ID <= IF_ADEF&&~flush_all;//!flush_all时需要清空所有的flush_all信号
     end
 end
 
-assign valid_IF = ~IF_ADEF;
+assign valid_IF = ~IF_ADEF;//valid拉低，因为不能执行错误取指的指令
 
 assign ready_go_IF = 1'b1;
 
@@ -488,7 +490,7 @@ assign pc_IF=pc;
 
 //-- ID stage
 
-//inst save for wait
+//*inst save for wait
 reg[31:0] inst_reg;
 
 reg use_inst_reg;
@@ -510,7 +512,7 @@ always @(posedge clk) begin
         inst_reg <= inst;
     end
 end
-//reg forward
+//*reg forward
 //0 EX, 1 MEM, 2 WB
 wire[31:0] result_forward[2:0];
 wire[4:0] dest_forward[2:0];
@@ -561,9 +563,8 @@ assign ready_go_ID =   ~( (rf_rd1_in_war&used_rj&~rf_rd1_is_forward&rf_rd1_nz)
                       | ~valid_ID;
                       //| ~ertn_flush_EX | ~exception_WB ;
                       //| ~has_int;  产生int时要把中断信息传下去，而不是直接重开流水线
-// end WAR
+//* end WAR
 
-// ID --> EX CSR 的信号和数据传递
 
 
 always @(posedge clk) begin
@@ -634,16 +635,16 @@ always @(posedge clk) begin
         inst_mod_wu_EX <= inst_mod_wu;
 
         csr_num_EX <= csrr_is_rdcnts ? csrr_rdcnts_num : inst[23:10];
-        exc_syscall_EX <= inst_syscall;
         code_EX <= inst[14:0];
         csr_re_EX <= inst_csrrd | inst_csrwr | inst_csrxchg | inst_rdcntid | inst_rdcntvl_w | inst_rdcntvh_w;
         csr_write_EX <= inst_csrwr || inst_csrxchg;
         csr_wmask_EX <= inst_csrxchg ? rj_value : {32{inst_csrwr}};  //mask <-- rj
 
-        ertn_flush_EX <= inst_ertn;
 
-        flush_all_EX <= ex_ID|flush_all_ID;
-        
+        flush_all_EX <= (ex_ID|flush_all_ID)&~flush_all;
+        //* excs        
+        ertn_flush_EX <= inst_ertn;
+        exc_syscall_EX <= inst_syscall;
         exc_ine_EX <= INE_ID;
         exc_adef_EX <= exc_adef_ID;
         exc_int_EX <= has_int;
@@ -651,13 +652,13 @@ always @(posedge clk) begin
 
     end
 end
-wire ex_ID=(inst_ertn | inst_syscall | has_int | flush_all_ID | INE_ID | inst_break)&&valid_ID;
+wire ex_ID=(inst_ertn | inst_syscall | has_int | INE_ID | inst_break)&&valid_ID;//!产生异常时，需要判断valid
 
 always @(posedge clk) begin
     if (reset) begin
         valid_ID <= 1'b0;
     end
-    else if(flush_all||flush_all_EX||flush_all_MEM||flush_all_ID||ex_ID&&allow_in_ID) // 中断异常，则取消流水级
+    else if(flush_all)
         valid_ID <= 1'b0;
     else if(br_taken && valid_ID && ready_go_ID) begin //只有IF取了错指令，而且ID指令有效，而且EX准备接受，才把valid=0传下去
         valid_ID <= 1'b0;
@@ -743,10 +744,15 @@ always@(posedge clk) begin
     end
 end
 
-assign unsigned_dividend_tvalid = unsigned_dividend_tvalid_reg && valid_EX;
-assign unsigned_divisor_tvalid = unsigned_divisor_tvalid_reg && valid_EX;
-assign signed_dividend_tvalid = signed_dividend_tvalid_reg && valid_EX;
-assign signed_divisor_tvalid = signed_divisor_tvalid_reg && valid_EX;
+wire found_flush_all_EX;
+assign found_flush_all_EX = (flush_all_MEM|flush_all_WB);
+wire divider_en_EX;
+assign divider_en_EX = valid_EX && ~found_flush_all_EX;//! 只有没发现异常才发除法请求，否则导致下次除法接收到上次的结果
+
+assign unsigned_dividend_tvalid = unsigned_dividend_tvalid_reg && divider_en_EX;
+assign unsigned_divisor_tvalid = unsigned_divisor_tvalid_reg && divider_en_EX;
+assign signed_dividend_tvalid = signed_dividend_tvalid_reg && divider_en_EX;
+assign signed_divisor_tvalid = signed_divisor_tvalid_reg && divider_en_EX;
 
 wire [31:0] div_result;
 assign div_result = (inst_div_wu_EX) ? unsigned_divider_res[63:32] : 
@@ -780,7 +786,6 @@ always @(posedge clk) begin
         mem_offset_MEM <= 2'b00;
 
         csr_num_MEM <= 14'b0;
-        exc_syscall_MEM <= 1'b0;
         code_MEM <= 15'b0;
         csr_re_MEM <= 1'b0;
         csr_write_MEM <= 1'b0;
@@ -791,6 +796,7 @@ always @(posedge clk) begin
         flush_all_MEM <= 1'b0;
         vaddr_MEM <= 32'b0;
 
+        exc_syscall_MEM <= 1'b0;
         exc_adef_MEM <= 1'b0;
         exc_ine_MEM <= 1'b0;
         exc_int_MEM <= 1'b0;
@@ -812,7 +818,6 @@ always @(posedge clk) begin
         mem_offset_MEM <= mem_offset;
 
         csr_num_MEM <= csr_num_EX;
-        exc_syscall_MEM <= exc_syscall_EX;
         code_MEM <= code_EX;
         csr_re_MEM <= csr_re_EX;
         csr_write_MEM <= csr_write_EX;
@@ -820,9 +825,10 @@ always @(posedge clk) begin
         ertn_flush_MEM <= ertn_flush_EX;
         csr_wvalue_MEM <= rkd_value_EX;
 
-        flush_all_MEM <= flush_all_EX|ALE_EX;
+        flush_all_MEM <= (flush_all_EX|ALE_EX)&~flush_all;
         vaddr_MEM <= alu_result;
 
+        exc_syscall_MEM <= exc_syscall_EX;
         exc_adef_MEM <= exc_adef_EX;
         exc_ine_MEM <= exc_ine_EX;
         exc_int_MEM <= exc_int_EX;
@@ -843,7 +849,7 @@ always @(posedge clk) begin
     if (reset) begin
         valid_EX <= 1'b0;
     end
-    else if (flush_all||INE_ID&&allow_in_EX) 
+    else if (flush_all||INE_ID&&allow_in_EX) //!如果ID级判出INE，则不应该执行该指令
         valid_EX <= 1'b0;
     else if(allow_in_EX) begin
         valid_EX <= valid_ID && ready_go_ID;
@@ -857,7 +863,7 @@ assign ready_go_EX = if_divider_EX && valid_EX ? (unsigned_dout_tvalid || signed
 
 wire ALE_EX;
 wire mem_en = (mem_we_EX || res_from_mem_EX) && valid && valid_EX && ready_go_EX //实际上要有EX的寄存器发请求，MEM才能接受 
-            && ~(flush_all_MEM||flush_all_WB);//正在刷新流水线时不发请求
+            && ~found_flush_all_EX;//正在刷新流水线时不发请求
 assign data_sram_en    = mem_en && ~ALE_EX;
                         
 assign data_sram_we    = mem_we_EX? {mem_word_EX|(mem_half_EX&mem_offset[1])|(mem_byte_EX&mem_offset[1]&mem_offset[0])
@@ -867,7 +873,7 @@ assign data_sram_we    = mem_we_EX? {mem_word_EX|(mem_half_EX&mem_offset[1])|(me
                                     : 4'b0;
 assign data_sram_addr  = {alu_result[31:2], 2'b00};
 
-assign ALE_EX = mem_en && (mem_word_EX&& |alu_result[1:0] || mem_half_EX&&alu_result[0]);
+assign ALE_EX = mem_en && (mem_word_EX&& |alu_result[1:0] || mem_half_EX&&alu_result[0]);//访存错误：地址非对齐
 
 decoder_2_4 u_dec4(
     .in(mem_offset_MEM),
@@ -924,7 +930,7 @@ always @(posedge clk) begin
         ertn_flush_WB <= ertn_flush_MEM;
         csr_wvalue_WB <= csr_wvalue_MEM;
 
-        flush_all_WB <= flush_all_MEM;
+        flush_all_WB <= flush_all_MEM&~flush_all;
         vaddr_WB <= vaddr_MEM;
 
         exc_int_WB <= exc_int_MEM;
@@ -988,8 +994,8 @@ assign ready_go_WB = 1'b1;
 assign reg_want_write_WB = dest_WB & {5{rf_we_WB & valid_WB}};
 
 //* CSR
-assign exception_WB = exc_syscall_WB|exc_int_WB|exc_adef_WB|exc_ine_WB|exc_ale_WB|exc_break_WB;
-assign flush_all = flush_all_WB; 
+assign exception_WB = exc_syscall_WB|exc_int_WB|exc_adef_WB|exc_ine_WB|exc_ale_WB|exc_break_WB;//异常信号
+assign flush_all = flush_all_WB; //flush_all传到WB级时，则刷新流水线
 
 assign csr_re = csr_re_WB;
 assign csr_num = csr_num_WB;
@@ -999,7 +1005,7 @@ assign csr_wvalue = csr_wvalue_WB;
 
 assign ertn_flush = ertn_flush_WB & valid_WB;
 assign wb_ex = exception_WB & flush_all;// 来自WB级的异常触发信号
-assign wb_ecode = exc_int_WB ? `ECODE_INT :
+assign wb_ecode = exc_int_WB ? `ECODE_INT : //异常类型
                       exc_adef_WB? `ECODE_ADE :
                       exc_ale_WB ? `ECODE_ALE :
                       exc_syscall_WB? `ECODE_SYS:
