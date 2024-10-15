@@ -1032,8 +1032,8 @@ csr u_csr(
 );
 
 assign csrr_is_rdcnts = inst_rdcntid | inst_rdcntvl_w | inst_rdcntvh_w;
-assign csrr_rdcnts_num = {14{inst_rdcntid}} & CSR_TID | 
-                         {14{inst_rdcntvl_w}} & CSR_STABLE_COUNTER_VL  | 
-                         {14{inst_rdcntvh_w}} & CSR_STABLE_COUNTER_VH;
+assign csrr_rdcnts_num = {14{inst_rdcntid}} & `CSR_TID | 
+                         {14{inst_rdcntvl_w}} & `CSR_STABLE_COUNTER_LO  | 
+                         {14{inst_rdcntvh_w}} & `CSR_STABLE_COUNTER_HI;
 
 endmodule
