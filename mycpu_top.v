@@ -20,8 +20,7 @@ module mycpu_top(
     output wire [ 4:0] debug_wb_rf_wnum,
     output wire [31:0] debug_wb_rf_wdata
 );
-reg         reset;
-always @(posedge clk) reset <= ~resetn;
+wire reset = ~resetn;
 
 reg         valid;
 always @(posedge clk) begin
@@ -165,22 +164,37 @@ wire csrr_is_rdcnts;//csr读指令是否是rdcnts指令，用于修改csr_num_EX
 wire [13:0] csrr_rdcnts_num;//rdcnts指令的csr_num
 
 //新的定义的线或接口的声明写这里
+wire req_inst, addr_ok_inst, data_ok_inst;
+wire req_mem, addr_ok_mem, data_ok_mem;
+//状态机
+reg [2:0]state_IF;
+reg state_ID, state_WB;
+reg [3:0] state_EX;
+//异步的valid，表明该指令可以产生效果
+wire effectful_IF, effectful_ID, effectful_EX, effectful_MEM, effectful_WB;
 
 
 //--  water flow control regs
 //* allow_ready
-wire allow_in_IF,allow_in_ID,allow_in_EX,allow_in_MEM,allow_in_WB;//是否允许进入下一级流水段
-wire ready_go_IF,ready_go_ID,ready_go_EX,ready_go_MEM,ready_go_WB;//是否准备好接受新指令
-wire valid_IF;
+wire allow_in_IF,allow_in_ID,allow_in_EX,allow_in_MEM,allow_in_WB;//下一时钟周期是否允许进入该流水段
+wire ready_go_IF,ready_go_ID,ready_go_EX,ready_go_MEM,ready_go_WB;//这一时钟周期是否准备好数据
+wire handshake_IF_ID = allow_in_ID & ready_go_IF;
+wire handshake_ID_EX = allow_in_EX & ready_go_ID;
+wire handshake_EX_MEM = allow_in_MEM & ready_go_EX;
+wire handshake_MEM_WB = allow_in_WB & ready_go_MEM;
+reg valid_IF;
 reg valid_ID,valid_EX,valid_MEM,valid_WB;
 //* data
 wire [31:0] pc_IF;
 reg [31:0] pc_ID;
-reg [31:0] alu_src1_EX, alu_src2_EX, rj_value_EX, rkd_value_EX, data_sram_wdata_EX, pc_EX, br_target_EX;
+reg [31:0] instreg_IF;//取指阶段若dataok到来时未握手则暂存
+reg [31:0] inst_ID;//ID阶段的译码
+wire [31:0] mem_wdata_ID;
+reg [31:0] alu_src1_EX, alu_src2_EX, rj_value_EX, rkd_value_EX, mem_wdata_EX, pc_EX, br_target_EX;
 reg [14:0] alu_op_EX;
 reg [4:0] dest_EX;
-reg [3:0] mem_we_EX;
-reg mem_en_EX, res_from_mem_EX, rf_we_EX, br_taken_EX;
+reg mem_we_EX;
+reg res_from_mem_EX, rf_we_EX, br_taken_EX;
 reg [31:0] result_all_MEM, pc_MEM;
 reg [4:0] dest_MEM;
 reg res_from_mem_MEM,rf_we_MEM;
@@ -189,6 +203,16 @@ reg [31:0] final_result_WB, pc_WB;
 reg rf_we_WB;
 
 reg if_divider_EX;
+
+wire data_sram_en_EX;
+reg data_sram_en_MEM;
+wire [3:0] data_sram_we_EX;
+reg [3:0] data_sram_we_MEM;
+wire [31:0] data_sram_addr_EX;
+reg [31:0] data_sram_addr_MEM;
+wire [31:0] data_sram_wdata_EX;
+reg [31:0] data_sram_wdata_MEM;
+reg [31:0] data_sram_rdata_reg;
 
 reg mem_byte_EX, mem_half_EX, mem_word_EX;
 reg mem_byte_MEM, mem_half_MEM, mem_word_MEM;
@@ -221,19 +245,19 @@ reg [31:0] vaddr_MEM,   vaddr_WB;
 
 //新的添加的通路声明放这里
 //--  inst decode for ID
-assign op_31_26  = inst[31:26];
-assign op_25_22  = inst[25:22];
-assign op_21_20  = inst[21:20];
-assign op_19_15  = inst[19:15];
+assign op_31_26  = inst_ID[31:26];
+assign op_25_22  = inst_ID[25:22];
+assign op_21_20  = inst_ID[21:20];
+assign op_19_15  = inst_ID[19:15];
 
-assign rd   = inst[ 4: 0];
-assign rj   = inst[ 9: 5];
-assign rk   = inst[14:10];
+assign rd   = inst_ID[ 4: 0];
+assign rj   = inst_ID[ 9: 5];
+assign rk   = inst_ID[14:10];
 
-assign i12  = inst[21:10];
-assign i20  = inst[24: 5];
-assign i16  = inst[25:10];
-assign i26  = {inst[ 9: 0], inst[25:10]};
+assign i12  = inst_ID[21:10];
+assign i20  = inst_ID[24: 5];
+assign i16  = inst_ID[25:10];
+assign i26  = {inst_ID[ 9: 0], inst_ID[25:10]};
 
 decoder_6_64 u_dec0(.in(op_31_26 ), .out(op_31_26_d ));
 decoder_4_16 u_dec1(.in(op_25_22 ), .out(op_25_22_d ));
@@ -259,7 +283,7 @@ assign inst_b      = op_31_26_d[6'h14];
 assign inst_bl     = op_31_26_d[6'h15];
 assign inst_beq    = op_31_26_d[6'h16];
 assign inst_bne    = op_31_26_d[6'h17];
-assign inst_lu12i_w= op_31_26_d[6'h05] & ~inst[25];
+assign inst_lu12i_w= op_31_26_d[6'h05] & ~inst_ID[25];
 
 
 assign inst_slti   = op_31_26_d[6'h00] & op_25_22_d[4'h8];
@@ -270,7 +294,7 @@ assign inst_xori   = op_31_26_d[6'h00] & op_25_22_d[4'hf];
 assign inst_sll_w  = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h0e];
 assign inst_srl_w  = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h0f];
 assign inst_sra_w  = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h10];
-assign inst_pcaddu12i = op_31_26_d[6'h07] & ~inst[25];
+assign inst_pcaddu12i = op_31_26_d[6'h07] & ~inst_ID[25];
 
 assign inst_mul_w  = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h18];
 assign inst_mulh_w = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h19];
@@ -292,17 +316,17 @@ assign inst_ld_hu  = op_31_26_d[6'h0a] & op_25_22_d[4'h9];
 assign inst_st_b   = op_31_26_d[6'h0a] & op_25_22_d[4'h4];
 assign inst_st_h   = op_31_26_d[6'h0a] & op_25_22_d[4'h5];
 
-assign inst_csrrd = op_31_26_d[6'h1] & ~inst[25] & ~inst[24] & (rj==0);
-assign inst_csrwr = op_31_26_d[6'h1] & ~inst[25] & ~inst[24] & (rj==1);
-assign inst_csrxchg = op_31_26_d[6'h1] & ~inst[25] & ~inst[24] & (rj!=0 & rj!=1);
+assign inst_csrrd = op_31_26_d[6'h1] & ~inst_ID[25] & ~inst_ID[24] & (rj==0);
+assign inst_csrwr = op_31_26_d[6'h1] & ~inst_ID[25] & ~inst_ID[24] & (rj==1);
+assign inst_csrxchg = op_31_26_d[6'h1] & ~inst_ID[25] & ~inst_ID[24] & (rj!=0 & rj!=1);
 assign inst_ertn = op_31_26_d[6'h1] & op_25_22_d[4'h9] 
                  & op_21_20_d[2'h0] & op_19_15_d[5'h10] & (rk==5'b01110);
 assign inst_syscall = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h16];
 
 assign inst_break = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h14];
-assign inst_rdcntid = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h0] & (inst[14:10] == 5'b11000) & (inst[4:0] == 5'b00000);
-assign inst_rdcntvl_w = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h0] & (inst[14:10] == 5'b11000) & (inst[9:5] == 5'b00000);
-assign inst_rdcntvh_w = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h0] & (inst[14:10] == 5'b11001) & (inst[9:5] == 5'b00000);
+assign inst_rdcntid = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h0] & (inst_ID[14:10] == 5'b11000) & (inst_ID[4:0] == 5'b00000);
+assign inst_rdcntvl_w = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h0] & (inst_ID[14:10] == 5'b11000) & (inst_ID[9:5] == 5'b00000);
+assign inst_rdcntvh_w = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h0] & (inst_ID[14:10] == 5'b11001) & (inst_ID[9:5] == 5'b00000);
 
 
 
@@ -381,8 +405,7 @@ assign mem_we        = inst_st_w|inst_st_b|inst_st_h;
 assign dest          = dst_is_r1 ? 5'd1 : 
                       dst_is_rj ? rj : rd;
 
-wire [31:0] data_sram_wdata_ID;
-assign data_sram_wdata_ID = rkd_value;
+assign  mem_wdata_ID = rkd_value;
 
 //* Mem instrs
 wire mem_byte, mem_half, mem_word, mem_signed;
@@ -419,11 +442,17 @@ assign br_target = (inst_beq || inst_bne || inst_bl || inst_b || inst_blt || ins
 
 assign alu_src1 = src1_is_pc  ? pc_ID[31:0] : rj_value;
 assign alu_src2 = src2_is_imm ? imm : rkd_value;
+always @(posedge clk) begin
+    if(reset)
+        data_sram_rdata_reg <= 32'b0;
+    else if(data_ok_mem)
+        data_sram_rdata_reg <= data_sram_rdata;
+end
 
-assign mem_rdata_w = data_sram_rdata;
-assign mem_rdata_h = mem_offset_d[2] ? data_sram_rdata[31:16] :data_sram_rdata[15:0];
-assign mem_rdata_b = {{8{mem_offset_d[0]}} & data_sram_rdata[7:0]} | {{8{mem_offset_d[1]}} & data_sram_rdata[15:8]} |
-                    {{8{mem_offset_d[2]}} & data_sram_rdata[23:16]} | {{8{mem_offset_d[3]}} & data_sram_rdata[31:24]};
+assign mem_rdata_w = data_sram_rdata_reg;
+assign mem_rdata_h = mem_offset_d[2] ? data_sram_rdata_reg[31:16] :data_sram_rdata_reg[15:0];
+assign mem_rdata_b = {{8{mem_offset_d[0]}} & data_sram_rdata_reg[7:0]} | {{8{mem_offset_d[1]}} & data_sram_rdata_reg[15:8]} |
+                    {{8{mem_offset_d[2]}} & data_sram_rdata_reg[23:16]} | {{8{mem_offset_d[3]}} & data_sram_rdata_reg[31:24]};
 
 assign mem_result   = mem_byte_MEM ? {{24{mem_signed_MEM & mem_rdata_b[7]}}, mem_rdata_b[7:0]} :
                       mem_half_MEM ? {{16{mem_signed_MEM & mem_rdata_h[15]}}, mem_rdata_h[15:0]} :
@@ -440,16 +469,10 @@ assign debug_wb_rf_wdata = rf_wdata;
 //IF, ID, EX, MEM, WB
 //--  Handshake
 
-assign allow_in_IF = ((allow_in_ID && ready_go_IF) || flush_all)&valid; // 中断或ertn执行时重开流水线
-assign allow_in_ID = (allow_in_EX && ready_go_ID)&valid;
-assign allow_in_EX = (allow_in_MEM && ready_go_EX)&valid;
-assign allow_in_MEM = (allow_in_WB && ready_go_MEM)&valid;
-assign allow_in_WB = ready_go_WB & valid; 
-
 //--  Pre-IF stage
 assign seq_pc       = pc + 3'h4;
 assign nextpc       = exception_WB&&flush_all ? ex_entry : (ertn_flush_WB? ertn_pc : (br_taken & valid_ID? br_target : seq_pc)); // 若中断，则进入中断处理入口；ertn 指令直到写回级才修改 CRMD，与此同时清空流水线并更新取指 PC。
-assign inst_sram_en = ~IF_ADEF;
+assign inst_sram_en = ~IF_ADEF & req_inst;
 assign inst_sram_we    = 4'b0;
 assign inst_sram_addr = pc;
 assign inst_sram_wdata = 32'b0;
@@ -467,6 +490,12 @@ end
 
 
 //-- IF stage
+always @(posedge clk) begin
+    if(reset)
+        instreg_IF <= 32'h0;
+    else if(data_ok_inst)
+        instreg_IF <= inst_sram_rdata;
+end
 wire IF_ADEF = |pc[1:0];//取指错误：pc非对齐
 
 always @(posedge clk) begin
@@ -482,35 +511,27 @@ always @(posedge clk) begin
     end
 end
 
-assign valid_IF = ~IF_ADEF;//valid拉低，因为不能执行错误取指的指令
-
-assign ready_go_IF = 1'b1;
+always @(posedge clk) begin
+    if(reset)
+        valid_IF <= 1'b0;
+    else if(allow_in_IF)
+        valid_IF <= 1'b1;
+    else if(flush_all)
+        valid_IF <= 1'b0;
+    else if(br_taken & valid_ID)
+        valid_IF <= 1'b0;
+end
 
 assign pc_IF=pc;
 
 //-- ID stage
 
 //*inst save for wait
-reg[31:0] inst_reg;
-
-reg use_inst_reg;
-assign inst            = use_inst_reg? inst_reg : inst_sram_rdata;//如果下一周期不接受新指令，则需要把当前指令保存起来，以便下一周期使用
-always @(posedge clk) begin  
-    if (reset) begin
-        use_inst_reg <= 1'b0;
-    end
-    else begin
-        use_inst_reg <= ~allow_in_ID;
-    end
-end
-
 always @(posedge clk) begin
-    if (reset) begin
-        inst_reg <= 32'b0;
-    end
-    else if(~allow_in_ID) begin
-        inst_reg <= inst;
-    end
+    if(reset)
+        inst_ID <= 32'h0;
+    else if(handshake_IF_ID)
+        inst_ID <= state_IF[0] ? instreg_IF : inst;
 end
 //*reg forward
 //0 EX, 1 MEM, 2 WB
@@ -575,11 +596,10 @@ always @(posedge clk) begin
         rj_value_EX <= 32'b0;
         rkd_value_EX <= 32'b0;
         dest_EX     <= 5'b0;
-        data_sram_wdata_EX <= 32'b0;
+        mem_wdata_EX <= 32'b0;
         res_from_mem_EX <= 1'b0;
         rf_we_EX    <= 1'b0;
-        mem_we_EX   <= 4'b0;
-        mem_en_EX   <= 1'b0;
+        mem_we_EX   <= 1'b0;
         pc_EX       <= 32'b0;
 
         mem_byte_EX <= 1'b0;
@@ -615,9 +635,8 @@ always @(posedge clk) begin
         rj_value_EX <= rj_value;
         rkd_value_EX <= rkd_value;
         dest_EX     <= dest;
-        data_sram_wdata_EX <= data_sram_wdata_ID;
+        mem_wdata_EX <= mem_wdata_ID;
         mem_we_EX   <= mem_we;
-        mem_en_EX   <= res_from_mem;
         res_from_mem_EX <= res_from_mem;
         rf_we_EX    <= gr_we & valid;
         pc_EX <= pc_ID;
@@ -660,11 +679,11 @@ always @(posedge clk) begin
     end
     else if(flush_all)
         valid_ID <= 1'b0;
-    else if(br_taken && valid_ID && ready_go_ID) begin //只有IF取了错指令，而且ID指令有效，而且EX准备接受，才把valid=0传下去
+    else if(br_taken && valid_ID && handshake_IF_ID) begin //只有IF取了错指令，而且ID指令有效，而且EX准备接受，才把valid=0传下去
         valid_ID <= 1'b0;
     end
-    else if(allow_in_ID) begin
-        valid_ID <= valid_IF && ready_go_IF;
+    else if(handshake_IF_ID) begin
+        valid_ID <= valid_IF;
     end
 end
 
@@ -710,54 +729,31 @@ signed_divider u_signed_divider (
     .m_axis_dout_tdata      (signed_divider_res),
     .m_axis_dout_tvalid     (signed_dout_tvalid)
 );
-
-reg signed_dividend_tvalid_reg, signed_divisor_tvalid_reg;
-reg unsigned_dividend_tvalid_reg, unsigned_divisor_tvalid_reg;
-
-always@(posedge clk) begin
-    if(reset) begin
-        unsigned_dividend_tvalid_reg <= 1'b0;
-        unsigned_divisor_tvalid_reg <= 1'b0;
+reg [31:0] divider_res_reg, divider_remain_reg;
+always @(posedge clk) begin
+    if(reset)begin
+        divider_res_reg <= 32'b0;
+        divider_remain_reg <= 32'b0;
     end
-    else if (allow_in_EX && (inst_div_wu | inst_mod_wu) && valid_ID) begin//!需要优先判断，因为这个时候tready可能拉高，这样就发不出去了
-        unsigned_dividend_tvalid_reg <= 1'b1;
-        unsigned_divisor_tvalid_reg <= 1'b1;
+    else if(unsigned_dout_tvalid)begin
+        divider_res_reg <= unsigned_divider_res[63:32];
+        divider_remain_reg <= unsigned_divider_res[31:0];
     end
-    else if (unsigned_dividend_tready && unsigned_divisor_tready) begin //如果实际运行的时候发现dividend_tready和divisor_tready不一定是同时拉高，可能需要把两个always块拆成四个
-        unsigned_dividend_tvalid_reg <= 1'b0;
-        unsigned_divisor_tvalid_reg <= 1'b0;
+    else if(signed_dout_tvalid)begin
+        divider_res_reg <= signed_divider_res[63:32];
+        divider_remain_reg <= signed_divider_res[31:0];
     end
 end
 
-always@(posedge clk) begin
-    if(reset) begin
-        signed_dividend_tvalid_reg <= 1'b0;
-        signed_divisor_tvalid_reg <= 1'b0;
-    end
-    else if (allow_in_EX && (inst_div_w | inst_mod_w) && valid_ID) begin
-        signed_dividend_tvalid_reg <= 1'b1;
-        signed_divisor_tvalid_reg <= 1'b1;
-    end
-    else if (signed_dividend_tready && signed_divisor_tready) begin
-        signed_dividend_tvalid_reg <= 1'b0;
-        signed_divisor_tvalid_reg <= 1'b0;
-    end
-end
 
 wire found_flush_all_EX;
 assign found_flush_all_EX = (flush_all_MEM|flush_all_WB);
-wire divider_en_EX;
-assign divider_en_EX = valid_EX && ~found_flush_all_EX;//! 只有没发现异常才发除法请求，否则导致下次除法接收到上次的结果
-
-assign unsigned_dividend_tvalid = unsigned_dividend_tvalid_reg && divider_en_EX;
-assign unsigned_divisor_tvalid = unsigned_divisor_tvalid_reg && divider_en_EX;
-assign signed_dividend_tvalid = signed_dividend_tvalid_reg && divider_en_EX;
-assign signed_divisor_tvalid = signed_divisor_tvalid_reg && divider_en_EX;
 
 wire [31:0] div_result;
-assign div_result = (inst_div_wu_EX) ? unsigned_divider_res[63:32] : 
-                    (inst_div_w_EX)  ? signed_divider_res[63:32] : 
-                    (inst_mod_wu_EX) ? unsigned_divider_res[31:0] : signed_divider_res[31:0];
+// assign div_result = (inst_div_wu_EX) ? unsigned_divider_res[63:32] : 
+//                     (inst_div_w_EX)  ? signed_divider_res[63:32] : 
+//                     (inst_mod_wu_EX) ? unsigned_divider_res[31:0] : signed_divider_res[31:0];
+assign div_result = (inst_div_wu_EX | inst_div_w_EX) ? divider_res_reg : divider_remain_reg;
 
 //* end Divider
 
@@ -777,6 +773,11 @@ always @(posedge clk) begin
         dest_MEM <= 5'b0;
         result_all_MEM <= 32'b0;
         pc_MEM <= 32'b0;
+
+        data_sram_en_MEM <= 1'b0;
+        data_sram_we_MEM <= 4'b0;
+        data_sram_addr_MEM <= 32'b0;
+        data_sram_wdata_MEM <= 32'b0;
 
         mem_byte_MEM <= 1'b0;
         mem_half_MEM <= 1'b0;
@@ -809,6 +810,11 @@ always @(posedge clk) begin
         result_all_MEM <= result_all;    
         dest_MEM <= dest_EX;
         pc_MEM <= pc_EX;
+
+        data_sram_en_MEM <= data_sram_en_EX;
+        data_sram_we_MEM <= data_sram_we_EX;
+        data_sram_addr_MEM <= data_sram_addr_EX;
+        data_sram_wdata_MEM <= data_sram_wdata_EX;
 
         mem_byte_MEM <= mem_byte_EX;
         mem_half_MEM <= mem_half_EX;
@@ -849,29 +855,28 @@ always @(posedge clk) begin
     if (reset) begin
         valid_EX <= 1'b0;
     end
-    else if (flush_all||INE_ID&&allow_in_EX) //!如果ID级判出INE，则不应该执行该指令
+    else if (flush_all) //!如果ID级判出INE，则不应该执行该指令
         valid_EX <= 1'b0;
-    else if(allow_in_EX) begin
-        valid_EX <= valid_ID && ready_go_ID;
+    else if(handshake_ID_EX)
+        valid_EX <= valid_ID;
+    else if(handshake_EX_MEM) begin
+        valid_EX <= 1'b0;
     end
 end
-
-assign ready_go_EX = if_divider_EX && valid_EX ? (unsigned_dout_tvalid || signed_dout_tvalid) : 1'b1;
-
 
 //-- MEM stage
 
 wire ALE_EX;
-wire mem_en = (mem_we_EX || res_from_mem_EX) && valid && valid_EX && ready_go_EX //实际上要有EX的寄存器发请求，MEM才能接受 
+wire mem_en = (mem_we_EX || res_from_mem_EX) &&~reset && valid_EX //实际上要有EX的寄存器发请求，MEM才能接受 
             && ~found_flush_all_EX;//正在刷新流水线时不发请求
-assign data_sram_en    = mem_en && ~ALE_EX;
+assign data_sram_en_EX    = mem_en && ~ALE_EX;
                         
-assign data_sram_we    = mem_we_EX? {mem_word_EX|(mem_half_EX&mem_offset[1])|(mem_byte_EX&mem_offset[1]&mem_offset[0])
+assign data_sram_we_EX    = mem_we_EX? {mem_word_EX|(mem_half_EX&mem_offset[1])|(mem_byte_EX&mem_offset[1]&mem_offset[0])
                                     ,mem_word_EX|(mem_half_EX&mem_offset[1])|(mem_byte_EX&mem_offset[1]&~mem_offset[0])
                                     ,mem_word_EX|(mem_half_EX&~mem_offset[1])|(mem_byte_EX&~mem_offset[1]&mem_offset[0])
                                     ,mem_word_EX|(mem_half_EX&~mem_offset[1])|(mem_byte_EX&~mem_offset[1]&~mem_offset[0])}//! half/byte的写入掩码与offset有关
                                     : 4'b0;
-assign data_sram_addr  = {alu_result[31:2], 2'b00};
+assign data_sram_addr_EX  = {alu_result[31:2], 2'b00};
 
 assign ALE_EX = mem_en && (mem_word_EX&& |alu_result[1:0] || mem_half_EX&&alu_result[0]);//访存错误：地址非对齐
 
@@ -880,10 +885,11 @@ decoder_2_4 u_dec4(
     .out(mem_offset_d)
 );
 
-// assign data_sram_wdata = data_sram_wdata_EX;
-assign data_sram_wdata = ({32{mem_word_EX}}&data_sram_wdata_EX)
-                        |({32{mem_half_EX}}&{2{data_sram_wdata_EX[15:0]}})
-                        |({32{mem_byte_EX}}&{4{data_sram_wdata_EX[7:0]}});//! 在内存将要写入的位置连接上正确的数据
+
+// assign mem_wdata = mem_wdata_EX;
+assign data_sram_wdata_EX = ({32{mem_word_EX}}&mem_wdata_EX)
+                        |({32{mem_half_EX}}&{2{mem_wdata_EX[15:0]}})
+                        |({32{mem_byte_EX}}&{4{mem_wdata_EX[7:0]}});//! 在内存将要写入的位置连接上正确的数据
 wire[31:0] final_result_MEM;
 assign final_result_MEM = res_from_mem_MEM ? mem_result : result_all_MEM;
 
@@ -951,12 +957,11 @@ always @(posedge clk) begin
     end
     else if(flush_all)
         valid_MEM <= 1'b0;
-    else if(allow_in_MEM) begin
-        valid_MEM <= valid_EX && ready_go_EX&&~ALE_EX;
-    end
+    else if(handshake_EX_MEM)
+        valid_MEM <= valid_EX;
+    else if(handshake_MEM_WB)
+        valid_MEM <= 1'b0;
 end
-
-assign ready_go_MEM = 1'b1;
 
 assign reg_want_write_MEM = dest_MEM & {5{rf_we_MEM & valid_MEM}};
 
@@ -981,8 +986,8 @@ always @(posedge clk) begin
     end
     else if (flush_all)
         valid_WB <= 1'b0;
-    else if (allow_in_WB) begin
-        valid_WB <= valid_MEM && ready_go_MEM ;
+    else if (handshake_MEM_WB) begin
+        valid_WB <= valid_MEM;
     end
 end
 
@@ -995,7 +1000,7 @@ assign reg_want_write_WB = dest_WB & {5{rf_we_WB & valid_WB}};
 
 //* CSR
 assign exception_WB = exc_syscall_WB|exc_int_WB|exc_adef_WB|exc_ine_WB|exc_ale_WB|exc_break_WB;//异常信号
-assign flush_all = flush_all_WB; //flush_all传到WB级时，则刷新流水线
+assign flush_all = flush_all_WB & valid_WB; //flush_all传到WB级时，则刷新流水线
 
 assign csr_re = csr_re_WB;
 assign csr_num = csr_num_WB;
@@ -1041,5 +1046,90 @@ assign csrr_is_rdcnts = inst_rdcntid | inst_rdcntvl_w | inst_rdcntvh_w;
 assign csrr_rdcnts_num = {14{inst_rdcntid}} & `CSR_TID | 
                          {14{inst_rdcntvl_w}} & `CSR_STABLE_COUNTER_LO  | 
                          {14{inst_rdcntvh_w}} & `CSR_STABLE_COUNTER_HI;
+
+//IF
+always @(posedge clk) begin
+    if(reset)
+        state_IF <= 3'b001;
+    else if((state[2] | state[0]) & handshake_IF_ID)
+        state_IF <= 3'b010;
+    else if(state_IF[1] & addr_ok_inst)
+        state_IF <= 3'b100;
+    else if(state_IF[2] & data_ok_inst | state_IF[1] & IF_ADEF)
+        state_IF <= 3'b001;
+end
+assign req_inst = state_IF[1];
+assign ready_go_IF = state_IF[0] | state_IF[2] & data_ok_inst;
+assign allow_in_IF = handshake_IF_ID;
+
+//ID
+always @(posedge clk) begin
+    if(reset)
+        state_ID <= 1'b0;
+    else if(~state_ID & handshake_IF_ID | state_ID & handshake_IF_ID & handshake_ID_EX)
+        state_ID <= 1'b1;
+    else if(state_ID & handshake_ID_EX)
+        state_ID <= 1'b0;
+end
+assign allow_in_ID = handshake_ID_EX |~state_ID;
+assign ready_go_ID = state_ID & ~( (rf_rd1_in_war&used_rj&~rf_rd1_is_forward&rf_rd1_nz)
+                      | (rf_rd2_in_war&used_rkd&~rf_rd2_is_forward&rf_rd2_nz)//If forward, then go.
+                      | reg_csr_in_war);
+//EX
+wire unsigned_handshake = unsigned_dividend_tvalid & unsigned_divisor_tvalid & unsigned_dividend_tready & unsigned_divisor_tready;
+wire signed_handshake = signed_dividend_tvalid & signed_divisor_tvalid & signed_dividend_tready & signed_divisor_tready;
+always @(posedge clk) begin
+    if(reset)
+        state_EX <= 4'b0001;
+    else if((state_EX[0] & handshake_ID_EX & valid_ID | state_EX[3] & handshake_ID_EX & handshake_EX_MEM & valid_ID) & if_divider)
+        state_EX <= 4'b0010;
+    else if(state_EX[1] & (unsigned_handshake | signed_handshake))
+        state_EX <= 4'b0100;
+    else if(state_EX[2] & (unsigned_dout_tvalid | signed_dout_tvalid) | 
+    state_EX[0] & handshake_ID_EX & (~if_divider | ~valid_ID)|
+    state_EX[3] & handshake_ID_EX & handshake_EX_MEM & (~if_divider |~valid_ID)
+    )
+        state_EX <= 4'b1000;
+    else if(state_EX[3] & handshake_EX_MEM &~handshake_ID_EX)
+        state_EX <= 4'b0001; 
+end
+assign allow_in_EX = state_EX[0] | state_EX[3] & handshake_EX_MEM;
+assign ready_go_EX = state_EX[3];
+assign signed_dividend_tvalid = state_EX[1] & (inst_div_w_EX | inst_mod_w_EX);
+assign signed_divisor_tvalid = state_EX[1] & (inst_div_w_EX | inst_mod_w_EX);
+assign unsigned_dividend_tvalid = state_EX[1] & (inst_div_wu_EX | inst_mod_wu_EX);
+assign unsigned_divisor_tvalid = state_EX[1] & (inst_div_wu_EX | inst_mod_wu_EX);
+//MEM
+always @(posedge clk) begin
+    if(reset)
+        state_MEM <= 4'b0001;
+    else if(state_MEM[0] & handshake_EX_MEM & (data_sram_en_EX & valid_EX) |
+            state_MEM[3] & handshake_EX_MEM & handshake_MEM_WB & (data_sram_en_EX & valid_EX))
+        state_MEM <= 4'b0010;
+    else if(state_MEM[1] & addr_ok_mem)
+        state_MEM <= 4'b0100;
+    else if(state_MEM[2] & data_ok_mem | 
+            state_MEM[0] & handshake_EX_MEM &(~data_sram_en_EX | ~valid_EX) |
+            state_MEM[3] & handshake_EX_MEM & handshake_MEM_WB &(~data_sram_en_EX | ~valid_EX))
+        state_MEM <= 4'b1000;
+    else if(state_MEM[3] & handshake_MEM_WB & ~handshake_EX_MEM)
+        state_MEM <= 4'b0001;
+end
+assign allow_in_MEM = state_MEM[0] | state_MEM[3] & handshake_MEM_WB;
+assign ready_go_MEM = state_MEM[3];
+
+assign data_sram_en = data_sram_en_MEM & state_MEM[1];
+assign data_sram_we = data_sram_we_MEM & {4{state_MEM[1]}};
+assign data_sram_addr = data_sram_addr_MEM;
+assign data_sram_wdata = data_sram_wdata_MEM;
+//WB
+assign allow_in_WB = 1'b1;
+assign ready_go_WB = 1'b1;
+
+assign effectful_IF = valid_IF & ~IF_ADEF & ~flush_all;
+assign effectful_ID = valid_ID & ~ex_ID & ~flush_all & ~flush_all_ID;
+assign effectful_EX = valid_EX &~ALE_EX & ~flush_all & ~flush_all_EX;
+assign effectful_MEM = valid_MEM & ~flush_all & ~flush_all_MEM;
+assign effectful_WB = valid_WB & ~flush_all & ~flush_all_WB;
 
 endmodule
