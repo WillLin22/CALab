@@ -121,12 +121,12 @@ module cpu_bridge_axi(
     reg [1:0] b_current_state;
     reg [1:0] b_next_state;
 
-    // 请求已经握手成功而未响应的情况，计数
+    // 请求已经握手成功而未响应的情况，用于计数
 	reg [1:0] ar_wait_resp_cnt;
 	reg [1:0] aw_wait_resp_cnt;
 	reg [1:0] wd_wait_resp_cnt;
 
-    wire read_block; // 写后读阻塞信号
+    wire read_block; // 写后读阻塞信号。只要有与读请求相同地址的写请求，就停止发起读请求直至Master 端收到写响应
     wire is_writing = (w_current_state == W_REQ_START) | (w_current_state == W_ADDR_RESP) | (w_current_state == W_DATA_RESP) | (w_current_state == W_REQ_END); // 有写操作
     assign read_block = (araddr == awaddr) && is_writing && (b_current_state != B_END); // 写后读(读写地址相同且写操作数据未写入)，则需要阻塞
 
@@ -160,7 +160,7 @@ module cpu_bridge_axi(
                 if(areset | read_block) begin 
                     ar_next_state = AR_IDLE;
                 end
-                else if(rd_inst_req | rd_data_req) begin
+                else if(rd_inst_req | rd_data_req) begin // 如果有读数据/读地址请求，则进入读请求状态
                     ar_next_state = AR_REQ_START;
                 end
                 else begin
@@ -168,7 +168,7 @@ module cpu_bridge_axi(
                 end
             end
             AR_REQ_START: begin
-                if(arvalid && arready) begin // 读请求握手
+                if(arvalid && arready) begin // 读请求握手成功，则进入读请求结束状态
                     ar_next_state = AR_REQ_END;
                 end
                 else begin
@@ -199,7 +199,7 @@ module cpu_bridge_axi(
                 if(areset) begin
                     r_next_state = R_IDLE;
                 end
-                else if (arvalid && arready | (|ar_wait_resp_cnt)) begin // 读请求握手 或者 有读请求已经握手但未成功响应的情况
+                else if (arvalid && arready | (|ar_wait_resp_cnt)) begin // 读请求握手 或者 有读请求已经握手但未成功响应的情况，则进入读数据传输开始状态
                     r_next_state = R_DATA_START;
                 end
                 else begin
@@ -207,7 +207,7 @@ module cpu_bridge_axi(
                 end
             end
             R_DATA_START: begin
-                if(rvalid && rready && rlast) begin // 传输完毕
+                if(rvalid && rready && rlast) begin // 传输完毕，则进入读数据传输结束状态
                     r_next_state = R_DATA_END;
                 end
                 else begin
@@ -238,7 +238,7 @@ module cpu_bridge_axi(
                 if(areset) begin
                     w_next_state = W_IDLE;
                 end
-                else if(data_sram_req) begin
+                else if(wr_data_req | wr_inst_req) begin // 有写请求，则进入写请求开始状态
                     w_next_state = W_REQ_START;
                 end
                 else begin
@@ -246,13 +246,13 @@ module cpu_bridge_axi(
                 end
             end
             W_REQ_START: begin
-                if((awvalid && awready && wvalid && wready) | ((|aw_wait_resp_cnt) & (|wd_wait_resp_cnt))) begin // 写请求和写数据同时握手 或者 写请求和写数据都存在已发送但是未收到响应的情况
+                if((awvalid && awready && wvalid && wready) | ((|aw_wait_resp_cnt) & (|wd_wait_resp_cnt))) begin // 写请求和写数据同时握手 或者 写请求和写数据都存在已发送但是未收到响应的情况，则进入写请求结束状态
                     w_next_state = W_REQ_END;
                 end
-                else if (awvalid & awready | (|aw_wait_resp_cnt)) begin // 写请求握手 或者 存在写请求发送但未收到响应的情况
+                else if (awvalid & awready | (|aw_wait_resp_cnt)) begin // 写请求握手 或者 存在写请求发送但未收到响应的情况（且没有写数据需要处理），则进入写请求地址响应状态
                     w_next_state = W_ADDR_RESP;
                 end
-                else if (wvalid & wready | (|wd_wait_resp_cnt)) begin // 写数据握手 或者 存在写数据发送但是未收到响应的情况
+                else if (wvalid & wready | (|wd_wait_resp_cnt)) begin // 写数据握手 或者 存在写数据发送但是未收到响应的情况（且没有写请求需要处理），则进入写数据响应状态
                     w_next_state = W_DATA_RESP;
                 end
                 else begin
@@ -470,7 +470,7 @@ module cpu_bridge_axi(
     assign inst_sram_rdata = inst_sram_rdata_reg;
     assign data_sram_rdata = data_sram_rdata_reg;
 
-    // 这些ok信号我不太确定！！！！
+    // 这些ok信号我不太确定！！！！讲义上说类 SRAM Slave 端输出的 addr_ok 和 data_o 信号若是来自组合逻辑，那么这个组合逻辑中不要引入 AXI 接口上的 valid 和 ready 信号？？
     assign inst_sram_addr_ok = (~arid[0] && arvalid && arready);
     assign data_sram_addr_ok = (arid[0] && arvalid && arready) | (wid[0] && awvalid && awready);
     assign inst_sram_data_ok = (~rid[0] && (r_current_state == R_DATA_END)) | (~bid[0] && bvalid && bready);
