@@ -122,9 +122,9 @@ module cpu_bridge_axi(
     reg [1:0] b_next_state;
 
     // 请求已经握手成功而未响应的情况，计数
-	reg [1:0] ar_resp_cnt;
-	reg [1:0] aw_resp_cnt;
-	reg [1:0] wd_resp_cnt;
+	reg [1:0] ar_wait_resp_cnt;
+	reg [1:0] aw_wait_resp_cnt;
+	reg [1:0] wd_wait_resp_cnt;
 
     wire read_block; // 写后读阻塞信号
     wire is_writing = (w_current_state == W_REQ_START) | (w_current_state == W_ADDR_RESP) | (w_current_state == W_DATA_RESP) | (w_current_state == W_REQ_END); // 有写操作
@@ -199,7 +199,7 @@ module cpu_bridge_axi(
                 if(areset) begin
                     r_next_state = R_IDLE;
                 end
-                else if (arvalid && arready | (|ar_resp_cnt)) begin // 读请求握手 或者 有读请求已经握手但未成功响应的情况
+                else if (arvalid && arready | (|ar_wait_resp_cnt)) begin // 读请求握手 或者 有读请求已经握手但未成功响应的情况
                     r_next_state = R_DATA_START;
                 end
                 else begin
@@ -246,13 +246,13 @@ module cpu_bridge_axi(
                 end
             end
             W_REQ_START: begin
-                if((awvalid && awready && wvalid && wready) | ((|aw_resp_cnt) & (|wd_resp_cnt))) begin // 写请求和写数据同时握手 或者 写请求和写数据都存在已发送但是未收到响应的情况
+                if((awvalid && awready && wvalid && wready) | ((|aw_wait_resp_cnt) & (|wd_wait_resp_cnt))) begin // 写请求和写数据同时握手 或者 写请求和写数据都存在已发送但是未收到响应的情况
                     w_next_state = W_REQ_END;
                 end
-                else if (awvalid & awready | (|aw_resp_cnt)) begin // 写请求握手 或者 存在写请求发送但未收到响应的情况
+                else if (awvalid & awready | (|aw_wait_resp_cnt)) begin // 写请求握手 或者 存在写请求发送但未收到响应的情况
                     w_next_state = W_ADDR_RESP;
                 end
-                else if (wvalid & wready | (|wd_resp_cnt)) begin // 写数据握手 或者 存在写数据发送但是未收到响应的情况
+                else if (wvalid & wready | (|wd_wait_resp_cnt)) begin // 写数据握手 或者 存在写数据发送但是未收到响应的情况
                     w_next_state = W_DATA_RESP;
                 end
                 else begin
@@ -358,16 +358,16 @@ module cpu_bridge_axi(
     /* --------------------- 读响应处理 ------------------------*/
     always @(posedge aclk) begin
 		if(areset) begin
-			ar_resp_cnt <= 2'b0;
+			ar_wait_resp_cnt <= 2'b0;
         end
-		else if(arvalid & arready & rvalid & rready) begin// 读地址和读数据通道同时完成握手
-			ar_resp_cnt <= ar_resp_cnt;
+		else if(arvalid && arready && rvalid && rready) begin // 读请求和读数据通道同时完成握手，请求得到响应
+			ar_wait_resp_cnt <= ar_wait_resp_cnt;
         end		
-		else if(arvalid & arready) begin // 读请求握手
-			ar_resp_cnt <= ar_resp_cnt + 1'b1;
+		else if(arvalid && arready) begin // 读请求握手
+			ar_wait_resp_cnt <= ar_wait_resp_cnt + 1'b1;
         end
-		else if(rvalid & rready) begin // 读响应握手
-			ar_resp_cnt <= ar_resp_cnt - 1'b1;
+		else if(rvalid && rready) begin // 读响应握手
+			ar_wait_resp_cnt <= ar_wait_resp_cnt - 1'b1;
         end
 	end
 
@@ -422,25 +422,31 @@ module cpu_bridge_axi(
     /* --------------------- 写响应处理 ------------------------*/
     always @(posedge aclk) begin
 		if(areset) begin
-			aw_resp_cnt <= 2'b0;
+			aw_wait_resp_cnt <= 2'b0;
 		end
-		else if(awvalid & awready) begin// 写请求握手，计数器加一
-			aw_resp_cnt <= aw_resp_cnt + 1'b1;
+        else if(awvalid && awready && bvalid && bready) begin
+            aw_wait_resp_cnt <= aw_wait_resp_cnt;
         end
-		else if(bvalid & bready) begin// 写响应握手，计数器减一
-			aw_resp_cnt <= aw_resp_cnt - 1'b1;
+		else if(awvalid && awready) begin// 写请求握手，计数器加一
+			aw_wait_resp_cnt <= aw_wait_resp_cnt + 1'b1;
+        end
+		else if(bvalid && bready) begin// 写响应握手，计数器减一
+			aw_wait_resp_cnt <= aw_wait_resp_cnt - 1'b1;
         end
 	end
 
 	always @(posedge aclk) begin
 		if(areset) begin
-			wd_resp_cnt <= 2'b0;
+			wd_wait_resp_cnt <= 2'b0;
 		end
-		else if(wvalid & wready) begin // 写数据握手，计数器加一
-			wd_resp_cnt <= wd_resp_cnt + 1'b1;
+        else if(wvalid && wready && bvalid && bready) begin
+            wd_wait_resp_cnt <= wd_wait_resp_cnt;
         end
-		else if(bvalid & bready) begin // 写响应握手，计数器减一
-			wd_resp_cnt <= wd_resp_cnt - 1'b1;
+		else if(wvalid && wready) begin // 写数据握手，计数器加一
+			wd_wait_resp_cnt <= wd_wait_resp_cnt + 1'b1;
+        end
+		else if(bvalid && bready) begin // 写响应握手，计数器减一
+			wd_wait_resp_cnt <= wd_wait_resp_cnt - 1'b1;
 		end
 	end
 
