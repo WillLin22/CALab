@@ -508,6 +508,7 @@ end
     end
 end
 assign seq_pc       = pc + 3'h4;
+assign inst_sram_wr = 1'b0;
 // assign nextpc       = exception_WB&&flush_all ? ex_entry : (ertn_flush_WB? ertn_pc : (br_taken & effectful_ID? br_target : seq_pc)); // 若中断，则进入中断处理入口；ertn 指令直到写回级才修改 CRMD，与此同时清空流水线并更新取�? PC�?
 assign nextpc = not_accepted &~flush_all ? nextpc_reg : (exception_WB&&flush_all ? ex_entry : (ertn_flush_WB? ertn_pc : (br_taken & effectful_ID? br_target : seq_pc)));
 assign inst_sram_req = ~IF_ADEF & req_inst;

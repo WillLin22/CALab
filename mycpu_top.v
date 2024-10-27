@@ -109,7 +109,7 @@ module mycpu_top(
         .debug_wb_rf_wdata  (debug_wb_rf_wdata)
     ); 
 
-    bridge_sram_axi my_bridge_sram_axi(
+    cpu_bridge_axi my_bridge_sram_axi(
         .aclk               (aclk),
         .aresetn            (aresetn),
 
