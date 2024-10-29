@@ -246,13 +246,13 @@ module cpu_bridge_axi(
                 end
             end
             W_REQ_START: begin
-                if((awvalid && awready && wvalid && wready) || ((|aw_wait_resp_cnt) && (|wd_wait_resp_cnt))) begin // 写请求和写数据同时握手 或者 写请求和写数据都存在已发送但是未收到响应的情况，则进入写请求结束状态
+                if((awvalid && awready && wvalid && wready) || ((|aw_wait_resp_cnt) && (|wd_wait_resp_cnt))) begin // 写请求地址和写请求数据同时握手 或者 写请求地址和写请求数据都存在已发送但是未收到响应的情况，则进入写请求结束状态
                     w_next_state = W_REQ_END;
                 end
-                else if ((awvalid && awready) || (|aw_wait_resp_cnt)) begin // 写请求握手 或者 存在写请求发送但未收到响应的情况（且没有写数据需要处理），则进入写请求地址响应状态
+                else if ((awvalid && awready) || (|aw_wait_resp_cnt)) begin // 写请求地址握手 或者 存在写请求地址发送但未收到响应的情况（且没有写数据需要处理），则进入写请求地址响应状态
                     w_next_state = W_ADDR_RESP;
                 end
-                else if ((wvalid && wready) || (|wd_wait_resp_cnt)) begin // 写数据握手 或者 存在写数据发送但是未收到响应的情况（且没有写请求需要处理），则进入写数据响应状态
+                else if ((wvalid && wready) || (|wd_wait_resp_cnt)) begin // 写请求数据握手 或者 存在写请求数据发送但是未收到响应的情况（且没有写请求地址需要处理），则进入写请求数据响应状态
                     w_next_state = W_DATA_RESP;
                 end
                 else begin
@@ -260,7 +260,7 @@ module cpu_bridge_axi(
                 end
             end
             W_ADDR_RESP: begin
-                if(wvalid && wready) begin // 写数据握手
+                if(wvalid && wready) begin // 写请求数据握手
                     w_next_state = W_REQ_END;
                 end
                 else begin
@@ -268,7 +268,7 @@ module cpu_bridge_axi(
                 end
             end
             W_DATA_RESP: begin
-                if (awvalid && awready) begin // 写请求握手
+                if (awvalid && awready) begin // 写请求地址握手
                     w_next_state = W_REQ_END;
                 end
                 else begin
@@ -353,7 +353,7 @@ module cpu_bridge_axi(
     assign arlock  = 1'b0;
     assign arcache = 4'b0;
     assign arprot  = 3'b0;
-    assign arvalid = (ar_current_state == AR_REQ_START);
+    assign arvalid = (ar_current_state == AR_REQ_START); // 主方读请求地址有效，等待从方发送代表准备好接收地址传输的 arready 信号。
     
     /* --------------------- 读响应处理 ------------------------*/
     always @(posedge aclk) begin
@@ -371,7 +371,7 @@ module cpu_bridge_axi(
         end
 	end
 
-	assign rready = (r_current_state == R_DATA_START);
+	assign rready = (r_current_state == R_DATA_START); // 主方准备好接收数据传输，等待从方发送代表读请求数据有效的 rvalid 信号
     
     /* --------------------- 写请求处理 ------------------------*/
     reg [31:0]  awaddr_reg;
@@ -396,7 +396,7 @@ module cpu_bridge_axi(
     assign awlock   = 1'b0;
     assign awcache  = 4'b0;
     assign awprot   = 3'b0;
-    assign awvalid  = (w_current_state == W_REQ_START) | (w_current_state == W_DATA_RESP); 
+    assign awvalid  = (w_current_state == W_REQ_START) | (w_current_state == W_DATA_RESP); // 主方写请求地址有效，等待从方发送代表准备好接收地址传输的 \verb|awready| 信号
 
     /* --------------------- 写数据处理 ------------------------*/
     reg [31:0] wdata_reg;
@@ -417,7 +417,7 @@ module cpu_bridge_axi(
     assign wdata    = wdata_reg;
     assign wstrb    = wstrb_reg;
     assign wlast    = 1'b1;
-    assign wvalid   = (w_current_state == W_REQ_START) | (w_current_state == W_ADDR_RESP);
+    assign wvalid   = (w_current_state == W_REQ_START) | (w_current_state == W_ADDR_RESP); // 主方写请求数据有效，等待从方发送代表准备好接收数据传输的 wready 信号
 
     /* --------------------- 写响应处理 ------------------------*/
     always @(posedge aclk) begin
@@ -427,7 +427,7 @@ module cpu_bridge_axi(
         else if(awvalid && awready && bvalid && bready) begin
             aw_wait_resp_cnt <= aw_wait_resp_cnt;
         end
-		else if(awvalid && awready) begin// 写请求握手，计数器加一
+		else if(awvalid && awready) begin// 写请求地址握手，计数器加一
 			aw_wait_resp_cnt <= aw_wait_resp_cnt + 1'b1;
         end
 		else if(bvalid && bready) begin// 写响应握手，计数器减一
@@ -442,7 +442,7 @@ module cpu_bridge_axi(
         else if(wvalid && wready && bvalid && bready) begin
             wd_wait_resp_cnt <= wd_wait_resp_cnt;
         end
-		else if(wvalid && wready) begin // 写数据握手，计数器加一
+		else if(wvalid && wready) begin // 写请求数据握手，计数器加一
 			wd_wait_resp_cnt <= wd_wait_resp_cnt + 1'b1;
         end
 		else if(bvalid && bready) begin // 写响应握手，计数器减一
@@ -450,21 +450,21 @@ module cpu_bridge_axi(
 		end
 	end
 
-    assign bready = (w_current_state == W_REQ_END);
+    assign bready = (w_current_state == W_REQ_END); // 主方准备好接收写响应，等待从方发送代表写请求响应有效的 bvalid 信号。
 
     /* --------------------- 传给cpu（rdata 缓冲区）------------------------*/
     reg [31:0] inst_sram_rdata_reg;
     reg [31:0] data_sram_rdata_reg;
     reg [3:0] rid_reg;
 
-    always @(negedge aclk) begin
+    always @(posedge aclk) begin
         if (areset) begin
             inst_sram_rdata_reg <= 32'b0;
             data_sram_rdata_reg <= 32'b0;
             rid_reg <= 4'b0;
         end
         else if (rvalid && rready) begin
-            inst_sram_rdata_reg <= rdata & {32{~rid[0]}};
+            inst_sram_rdata_reg <= rdata & {32{~rid[0]}}; // 读请求读出的数据
             data_sram_rdata_reg <= rdata & {32{rid[0]}};
             rid_reg <= rid;
         end
@@ -473,7 +473,6 @@ module cpu_bridge_axi(
     assign inst_sram_rdata = inst_sram_rdata_reg;
     assign data_sram_rdata = data_sram_rdata_reg;
 
-    // 这些ok信号我不太确定！！！！讲义上说类 SRAM Slave 端输出的 addr_ok 和 data_o 信号若是来自组合逻辑，那么这个组合逻辑中不要引入 AXI 接口上的 valid 和 ready 信号？？
     assign inst_sram_addr_ok = (~arid[0] && arvalid && arready);
     assign data_sram_addr_ok = (arid[0] && arvalid && arready) | (wid[0] && awvalid && awready);
     assign inst_sram_data_ok = (~rid_reg[0] && (r_current_state == R_DATA_END)) | (~bid[0] && bvalid && bready);
