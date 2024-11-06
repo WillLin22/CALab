@@ -277,4 +277,28 @@ assign has_int = (|(csr_estat_is[11:0] & csr_ecfg_lie[11:0])) & csr_crmd_ie; // 
 assign ex_entry = csr_eentey_rvalue; // 送往pre-IF级的异常处理入口地址
 assign ertn_pc = csr_era_rvalue; // 送往pre-IF级的异常返回地址
 
+//TLBIDX
+//3-0 index:tlbsrch写，tlbr/w读
+//29-24 ps:rd写，wr/fill读
+//31 NE:srch和rd写，wr和fill在CSR.ESTAT.Ecode!=0x3F读取反值，在不满足时读取1
+
+// TLBEHI
+// 31-13 vppn:srch/wr/fill的虚地址来源，rd写入
+// 异常处理：写入vaddr[31:13]至该寄存器：inst/load/store页无效，写允许3例外和特权等级不合规
+
+// TLBELO0、TLBELO1：wr/fill读，rd写
+// 0 V
+// 1 D
+// 3-2 PLV
+// 5-4 MAT
+// 6 G
+// 27-8 PPN
+
+// ASID
+// 9-0 ASID 取指、访存、srch、wr、fill读，rd写
+// 23-16 ASIDBITS=8'd10
+
+// TLBRENTRY
+// 31-6 PA TLB重填例外入口地址31-6位
+
 endmodule
