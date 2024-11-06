@@ -28,12 +28,10 @@ module encoder_16_4(
     output wire [ 3:0] out
 );
 
-genvar i;
-generate
-    for (i = 0; i < 16; i = i + 1) begin : gen_for_enc_16_4
-        assign out = (in[i] == 1'b1) ? i : out;
-    end
-endgenerate
+assign out[0] = in[1] | in[3] | in[5] | in[7] | in[9] | in[11] | in[13] | in[15];
+assign out[1] = in[2] | in[3] | in[6] | in[7] | in[10] | in[11] | in[14] | in[15];
+assign out[2] = in[4] | in[5] | in[6] | in[7] | in[12] | in[13] | in[14] | in[15];
+assign out[3] = in[8] | in[9] | in[10] | in[11] | in[12] | in[13] | in[14] | in[15];
 
 endmodule
 
