@@ -238,19 +238,22 @@ tlb_search_match s1
     .index(s1_index)
 );
 
+wire s0_odd = tlb_ps4MB[s0_index] ? s0_vppn[8] : s0_va_bit12;
+wire s1_odd = tlb_ps4MB[s1_index] ? s1_vppn[8] : s1_va_bit12;
 
-assign s0_ppn = tlb_ppn0[s0_index];
-assign s1_ppn = tlb_ppn1[s1_index];
+
+assign s0_ppn = s0_odd ? tlb_ppn1[s0_index] : tlb_ppn0[s0_index];
+assign s1_ppn = s1_odd ? tlb_ppn1[s1_index] : tlb_ppn0[s1_index];
 assign s0_ps  = tlb_ps4MB[s0_index]?6'd21:6'd12;
 assign s1_ps  = tlb_ps4MB[s1_index]?6'd21:6'd12;
-assign s0_plv = tlb_plv0[s0_index];
-assign s1_plv = tlb_plv1[s1_index];
-assign s0_mat = tlb_mat0[s0_index];
-assign s1_mat = tlb_mat1[s1_index];
-assign s0_d   = tlb_d0[s0_index];
-assign s1_d   = tlb_d1[s1_index];
-assign s0_v   = tlb_v0[s0_index];
-assign s1_v   = tlb_v1[s1_index];
+assign s0_plv = s0_odd ? tlb_plv1[s0_index] : tlb_plv0[s0_index];
+assign s1_plv = s1_odd ? tlb_plv1[s1_index] : tlb_plv0[s1_index];
+assign s0_mat = s0_odd ? tlb_mat1[s0_index] : tlb_mat0[s0_index];
+assign s1_mat = s1_odd ? tlb_mat1[s1_index] : tlb_mat0[s1_index];
+assign s0_d   = s0_odd ? tlb_d1[s0_index] : tlb_d0[s0_index];
+assign s1_d   = s1_odd ? tlb_d1[s1_index] : tlb_d0[s1_index];
+assign s0_v   = s0_odd ? tlb_v1[s0_index] : tlb_v0[s0_index];
+assign s1_v   = s1_odd ? tlb_v1[s1_index] : tlb_v0[s1_index];
 
 //invtlb
 integer i;
@@ -259,46 +262,46 @@ always @(posedge clk) begin
         case(invtlb_op)
             5'b00000:begin
                 for(i=0;i<TLBNUM;i=i+1)begin
-                    tlb_e[i] = 1'b0;
+                    tlb_e[i] <= 1'b0;
                 end
             end
             5'b00001:begin
                 for(i=0;i<TLBNUM;i=i+1)begin
-                    tlb_e[i] = 1'b0;
+                    tlb_e[i] <= 1'b0;
                 end
             end
             5'b00010:begin
                 for(i=0;i<TLBNUM;i=i+1)begin
                     if(tlb_g[i])begin
-                        tlb_e[i] = 1'b0;
+                        tlb_e[i] <= 1'b0;
                     end
                 end
             end
             5'b00011:begin
                 for(i=0;i<TLBNUM;i=i+1)begin
                     if(!tlb_g[i])begin
-                        tlb_e[i] = 1'b0;
+                        tlb_e[i] <= 1'b0;
                     end
                 end
             end
             5'b00100:begin
                 for(i=0;i<TLBNUM;i=i+1)begin
                     if(!tlb_g[i]&&tlb_asid[i]==invtlb_asid)begin
-                        tlb_e[i] = 1'b0;
+                        tlb_e[i] <= 1'b0;
                     end
                 end
             end
             5'b00101:begin
                 for(i=0;i<TLBNUM;i=i+1)begin
                     if(!tlb_g[i]&&tlb_asid[i]==invtlb_asid&&tlb_vppn[i]==invtlb_va)begin
-                        tlb_e[i] = 1'b0;
+                        tlb_e[i] <= 1'b0;
                     end
                 end
             end
             5'b00110:begin
                 for(i=0;i<TLBNUM;i=i+1)begin
                     if(!tlb_g[i]||(tlb_asid[i]==invtlb_asid&&tlb_vppn[i]==invtlb_va))begin
-                        tlb_e[i] = 1'b0;
+                        tlb_e[i] <= 1'b0;
                     end
                 end
             end
@@ -308,21 +311,21 @@ end
 //write
 always @(posedge clk) begin
     if(we)begin
-        tlb_e[w_index] = w_e;
-        tlb_ps4MB[w_index] = w_ps==6'd21;
-        tlb_vppn[w_index] = w_vppn;
-        tlb_asid[w_index] = w_asid;
-        tlb_g[w_index] = w_g;
-        tlb_ppn0[w_index] = w_ppn0;
-        tlb_plv0[w_index] = w_plv0;
-        tlb_mat0[w_index] = w_mat0;
-        tlb_d0[w_index] = w_d0;
-        tlb_v0[w_index] = w_v0;
-        tlb_ppn1[w_index] = w_ppn1;
-        tlb_plv1[w_index] = w_plv1;
-        tlb_mat1[w_index] = w_mat1;
-        tlb_d1[w_index] = w_d1;
-        tlb_v1[w_index] = w_v1;
+        tlb_e[w_index] <= w_e;
+        tlb_ps4MB[w_index] <= w_ps==6'd21;
+        tlb_vppn[w_index] <= w_vppn;
+        tlb_asid[w_index] <= w_asid;
+        tlb_g[w_index] <= w_g;
+        tlb_ppn0[w_index] <= w_ppn0;
+        tlb_plv0[w_index] <= w_plv0;
+        tlb_mat0[w_index] <= w_mat0;
+        tlb_d0[w_index] <= w_d0;
+        tlb_v0[w_index] <= w_v0;
+        tlb_ppn1[w_index] <= w_ppn1;
+        tlb_plv1[w_index] <= w_plv1;
+        tlb_mat1[w_index] <= w_mat1;
+        tlb_d1[w_index] <= w_d1;
+        tlb_v1[w_index] <= w_v1;
     end
 end
 //read
