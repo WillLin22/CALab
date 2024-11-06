@@ -67,7 +67,12 @@ module tlb
     output wire [ 1:0]                  r_plv1,
     output wire [ 1:0]                  r_mat1,
     output wire                         r_d1,
-    output wire                         r_v1
+    output wire                         r_v1,
+    // ports for tlb_srch
+    input wire  [18:0]                  tlbsrch_vppn,
+    input wire  [ 9:0]                  tlbsrch_asid,
+    output wire                         tlbsrch_found,
+    output wire [$clog2(TLBNUM)-1:0]    tlbsrch_index
 );
 /* 
 invop:
@@ -254,6 +259,80 @@ assign s0_d   = s0_odd ? tlb_d1[s0_index] : tlb_d0[s0_index];
 assign s1_d   = s1_odd ? tlb_d1[s1_index] : tlb_d0[s1_index];
 assign s0_v   = s0_odd ? tlb_v1[s0_index] : tlb_v0[s0_index];
 assign s1_v   = s1_odd ? tlb_v1[s1_index] : tlb_v0[s1_index];
+
+//tlbsrch
+tlb_search_match tlb_srch
+(
+    .s_vppn(tlbsrch_vppn),
+    .s_asid(tlbsrch_asid),
+    .tlb_vppn_0(tlb_vppn[0]),
+    .tlb_vppn_1(tlb_vppn[1]),
+    .tlb_vppn_2(tlb_vppn[2]),
+    .tlb_vppn_3(tlb_vppn[3]),
+    .tlb_vppn_4(tlb_vppn[4]),
+    .tlb_vppn_5(tlb_vppn[5]),
+    .tlb_vppn_6(tlb_vppn[6]),
+    .tlb_vppn_7(tlb_vppn[7]),
+    .tlb_vppn_8(tlb_vppn[8]),
+    .tlb_vppn_9(tlb_vppn[9]),
+    .tlb_vppn_10(tlb_vppn[10]),
+    .tlb_vppn_11(tlb_vppn[11]),
+    .tlb_vppn_12(tlb_vppn[12]),
+    .tlb_vppn_13(tlb_vppn[13]),
+    .tlb_vppn_14(tlb_vppn[14]),
+    .tlb_vppn_15(tlb_vppn[15]),
+    .tlb_ps4MB_0(tlb_ps4MB[0]),
+    .tlb_ps4MB_1(tlb_ps4MB[1]),
+    .tlb_ps4MB_2(tlb_ps4MB[2]),
+    .tlb_ps4MB_3(tlb_ps4MB[3]),
+    .tlb_ps4MB_4(tlb_ps4MB[4]),
+    .tlb_ps4MB_5(tlb_ps4MB[5]),
+    .tlb_ps4MB_6(tlb_ps4MB[6]),
+    .tlb_ps4MB_7(tlb_ps4MB[7]),
+    .tlb_ps4MB_8(tlb_ps4MB[8]),
+    .tlb_ps4MB_9(tlb_ps4MB[9]),
+    .tlb_ps4MB_10(tlb_ps4MB[10]),
+    .tlb_ps4MB_11(tlb_ps4MB[11]),
+    .tlb_ps4MB_12(tlb_ps4MB[12]),
+    .tlb_ps4MB_13(tlb_ps4MB[13]),
+    .tlb_ps4MB_14(tlb_ps4MB[14]),
+    .tlb_ps4MB_15(tlb_ps4MB[15]),
+    .tlb_asid_0(tlb_asid[0]),
+    .tlb_asid_1(tlb_asid[1]),
+    .tlb_asid_2(tlb_asid[2]),
+    .tlb_asid_3(tlb_asid[3]),
+    .tlb_asid_4(tlb_asid[4]),
+    .tlb_asid_5(tlb_asid[5]),
+    .tlb_asid_6(tlb_asid[6]),
+    .tlb_asid_7(tlb_asid[7]),
+    .tlb_asid_8(tlb_asid[8]),
+    .tlb_asid_9(tlb_asid[9]),
+    .tlb_asid_10(tlb_asid[10]),
+    .tlb_asid_11(tlb_asid[11]),
+    .tlb_asid_12(tlb_asid[12]),
+    .tlb_asid_13(tlb_asid[13]),
+    .tlb_asid_14(tlb_asid[14]),
+    .tlb_asid_15(tlb_asid[15]),
+    .tlb_g_0(tlb_g[0]),
+    .tlb_g_1(tlb_g[1]),
+    .tlb_g_2(tlb_g[2]),
+    .tlb_g_3(tlb_g[3]),
+    .tlb_g_4(tlb_g[4]),
+    .tlb_g_5(tlb_g[5]),
+    .tlb_g_6(tlb_g[6]),
+    .tlb_g_7(tlb_g[7]),
+    .tlb_g_8(tlb_g[8]),
+    .tlb_g_9(tlb_g[9]),
+    .tlb_g_10(tlb_g[10]),
+    .tlb_g_11(tlb_g[11]),
+    .tlb_g_12(tlb_g[12]),
+    .tlb_g_13(tlb_g[13]),
+    .tlb_g_14(tlb_g[14]),
+    .tlb_g_15(tlb_g[15]),
+    .match(tlbsrch_found),
+    .index(tlbsrch_index)
+);
+
 
 //invtlb
 integer i;
