@@ -23,6 +23,20 @@ end endgenerate
 
 endmodule
 
+module encoder_16_4(
+    input  wire [15:0] in,
+    output wire [ 3:0] out
+);
+
+genvar i;
+generate
+    for (i = 0; i < 16; i = i + 1) begin : gen_for_enc_16_4
+        assign out = (in[i] == 1'b1) ? i : out;
+    end
+endgenerate
+
+endmodule
+
 
 module decoder_5_32(
     input  wire [ 4:0] in,
