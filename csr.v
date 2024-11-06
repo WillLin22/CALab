@@ -1,6 +1,10 @@
 `include "csr_defines.vh"
 
-module csr(
+module csr
+#(
+    parameter TLBNUM = 16
+)
+(
     input wire clk,
     input wire rst,
 
@@ -23,7 +27,45 @@ module csr(
     input wire   [8:0] wb_esubcode, // 来自WB级的异常类型2级码
     input wire   [31:0] wb_pc, // 来自WB级的异常发生地址
 
-    input wire   [31:0] wb_vaddr // 来自WB级的访存地址
+    input wire   [31:0] wb_vaddr, // 来自WB级的访存地址
+
+    //TLB相关接口
+    //write
+    input  wire                         tlb_w_we,
+    input  wire  [ 3:0]                 tlb_w_wop,//TLB写指令，0-3分别对应srch，rd，wr，fill
+    input  wire                         tlb_w_e,
+    input  wire  [$clog2(TLBNUM)-1:0]   tlb_w_idx,//TLB索引
+    input  wire  [18:0]                 tlb_w_vppn,//TLB虚页号
+    input  wire  [ 5:0]                 tlb_w_ps,//TLB页大小
+    input  wire  [ 9:0]                 tlb_w_asid,//TLB地址空间标识符
+    input  wire                         tlb_w_g,//TLB全局位
+    input  wire [19:0]                  tlb_w_ppn0,
+    input  wire [ 1:0]                  tlb_w_plv0,
+    input  wire [ 1:0]                  tlb_w_mat0, 
+    input  wire                         tlb_w_d0,
+    input  wire                         tlb_w_v0,
+    input  wire [19:0]                  tlb_w_ppn1,
+    input  wire [ 1:0]                  tlb_w_plv1,
+    input  wire [ 1:0]                  tlb_w_mat1,
+    input  wire                         tlb_w_d1,
+    input  wire                         tlb_w_v1,
+    //read
+    output wire                         tlb_r_e,
+    output wire  [$clog2(TLBNUM)-1:0]   tlb_r_idx,//TLB索引
+    output wire  [18:0]                 tlb_r_vppn,//TLB虚页号
+    output wire  [ 5:0]                 tlb_r_ps,//TLB页大小
+    output wire  [ 9:0]                 tlb_r_asid,//TLB地址空间标识符
+    output wire                         tlb_r_g,//TLB全局位
+    output wire [19:0]                  tlb_r_ppn0,
+    output wire [ 1:0]                  tlb_r_plv0,
+    output wire [ 1:0]                  tlb_r_mat0, 
+    output wire                         tlb_r_d0,
+    output wire                         tlb_r_v0,
+    output wire [19:0]                  tlb_r_ppn1,
+    output wire [ 1:0]                  tlb_r_plv1,
+    output wire [ 1:0]                  tlb_r_mat1,
+    output wire                         tlb_r_d1,
+    output wire                         tlb_r_v1
 );
 
 /* ------------------ CRMD 当前模式信息 ------------------*/
@@ -58,6 +100,7 @@ end
 
 
 // 目前处理器仅支持直接地址翻译模式，所以CRMD 的 DA、PG、DATF、DATM 域可以暂时置为常值。
+//TODO: fix it
 assign csr_crmd_da = 1'b1;
 assign csr_crmd_pg = 1'b0;
 assign csr_crmd_datf = 2'b00;
@@ -175,6 +218,7 @@ wire [31:0] csr_save2_rvalue = csr_save2_data;
 wire [31:0] csr_save3_rvalue = csr_save3_data;
 
 wire[31:0] csr_badv_rvalue, csr_tid_rvalue, csr_tcfg_rvalue, csr_tval_rvalue;
+wire[31:0] csr_tlbidx_rvalue, csr_tlbehi_rvalue, csr_tlbelo0_rvalue, csr_tlbelo1_rvalue, csr_asid_rvalue, csr_tlbrentry_rvalue;
 
 //-- csr_badv
 
@@ -271,20 +315,69 @@ assign csr_rvalue = {32{csr_num==`CSR_CRMD}} & csr_crmd_rvalue
                  | {32{csr_num==`CSR_TVAL}} & csr_tval_rvalue
                  | {32{csr_num==`CSR_TICLR}} & csr_ticlr_rvalue
                  | {32{csr_num==`CSR_STABLE_COUNTER_HI}} & csr_stable_counter_hvalue
-                    | {32{csr_num==`CSR_STABLE_COUNTER_LO}} & csr_stable_counter_lvalue;
+                    | {32{csr_num==`CSR_STABLE_COUNTER_LO}} & csr_stable_counter_lvalue
+                    | {32{csr_num==`CSR_TLBIDX}} & csr_tlbidx_rvalue
+                    | {32{csr_num==`CSR_TLBEHI}} & csr_tlbehi_rvalue
+                    | {32{csr_num==`CSR_TLBELO0}} & csr_tlbelo0_rvalue
+                    | {32{csr_num==`CSR_TLBELO1}} & csr_tlbelo1_rvalue
+                    | {32{csr_num==`CSR_ASID}} & csr_asid_rvalue
+                    | {32{csr_num==`CSR_TLBRENTRY}} & csr_tlbrentry_rvalue;
 
 assign has_int = (|(csr_estat_is[11:0] & csr_ecfg_lie[11:0])) & csr_crmd_ie; // 送往ID级的中断有效信号 中断的使能情况分两个层次：低层次是与各中断一一对应的局部中断使能，通过 ECFG 控制寄存器的 LIE（Local Interrupt Enable）域的 11, 9..0 位来控制；高层次是全局中断使能，通过 CRMD 控制状态寄存器的 IE（Interrupt Enable）位来控制。
 assign ex_entry = csr_eentey_rvalue; // 送往pre-IF级的异常处理入口地址
 assign ertn_pc = csr_era_rvalue; // 送往pre-IF级的异常返回地址
 
+wire tlb_srch = tlb_w_we & tlb_w_wop[0];
+wire tlb_rd = tlb_w_we & tlb_w_wop[1];
+wire tlb_wr = tlb_w_we & tlb_w_wop[2];
+wire tlb_fill = tlb_w_we & tlb_w_wop[3];
+    // else if (csr_we && csr_num == `CSR_ERA)
+    //     csr_era_pc <= csr_wmask[`CSR_ERA_PC] & csr_wvalue[`CSR_ERA_PC]
+    //                 | ~csr_wmask[`CSR_ERA_PC] & csr_era_pc;
 //TLBIDX
 //3-0 index:tlbsrch写，tlbr/w读
 //29-24 ps:rd写，wr/fill读
 //31 NE:srch和rd写，wr和fill在CSR.ESTAT.Ecode!=0x3F读取反值，在不满足时读取1
-
+reg [3:0] tlbidx_idx;
+reg [5:0] tlbidx_ps;
+reg tlbidx_ne;
+assign tlb_r_idx = tlbidx_idx;
+assign tlb_r_ps = tlbidx_ps;
+assign tlb_r_e = (csr_estat_ecode == 6'h3F)? 1'b1 : ~tlbidx_ne;
+always @(posedge clk) begin
+    if(tlb_srch)begin
+        tlbidx_idx <= tlb_w_idx;
+        tlbidx_ne  <=~tlb_w_e;
+    end
+    else if(tlb_rd)begin
+        tlbidx_ps <= tlb_w_ps;
+        tlbidx_ne <=~tlb_w_e;
+    end
+    else if(csr_we && csr_num == `CSR_TLBIDX)begin
+        tlbidx_idx <= csr_wmask[`TLBIDX_IDX] & csr_wvalue[`TLBIDX_IDX]
+                      | ~csr_wmask[`TLBIDX_IDX] & tlbidx_idx;
+        tlbidx_ps <= csr_wmask[`TLBIDX_PS] & csr_wvalue[`TLBIDX_PS]
+                      | ~csr_wmask[`TLBIDX_PS] & tlbidx_ps;
+        tlbidx_ne <= csr_wmask[`TLBIDX_NE] & csr_wvalue[`TLBIDX_NE]
+                      | ~csr_wmask[`TLBIDX_NE] & tlbidx_ne;
+    end
+end
+assign csr_tlbidx_rvalue = {tlbidx_ne, 1'b0, tlbidx_ps, 20'b0, tlbidx_idx};
 // TLBEHI
 // 31-13 vppn:srch/wr/fill的虚地址来源，rd写入
 // 异常处理：写入vaddr[31:13]至该寄存器：inst/load/store页无效，写允许3例外和特权等级不合规
+reg [18:0] tlbehi_vppn;
+assign tlb_r_vppn = tlbehi_vppn;
+always @(posedge clk) begin
+    if(tlb_rd)begin
+        tlbehi_vppn <= tlb_w_vppn;
+    end
+    else if(csr_we && csr_num == `CSR_TLBEHI)begin
+        tlbehi_vppn <= csr_wmask[`TLBEHI_VPPN] & csr_wvalue[`TLBEHI_VPPN]
+                      | ~csr_wmask[`TLBEHI_VPPN] & tlbehi_vppn;
+    end
+end
+assign csr_tlbehi_rvalue = {tlbehi_vppn, 13'b0};
 
 // TLBELO0、TLBELO1：wr/fill读，rd写
 // 0 V
@@ -293,12 +386,113 @@ assign ertn_pc = csr_era_rvalue; // 送往pre-IF级的异常返回地址
 // 5-4 MAT
 // 6 G
 // 27-8 PPN
+reg tlbelo0_v, tlbelo0_d, tlbelo0_g;
+reg [1:0] tlbelo0_plv, tlbelo0_mat;
+reg [19:0] tlbelo0_ppn;
+assign tlb_r_v0 = tlbelo0_v;
+assign tlb_r_d0 = tlbelo0_d;
+assign tlb_r_plv0 = tlbelo0_plv;
+assign tlb_r_mat0 = tlbelo0_mat;
+assign tlb_r_g = tlbelo0_g;
+assign tlb_r_ppn0 = tlbelo0_ppn;
+always @(posedge clk) begin
+    if(tlb_rd)begin
+        tlbelo0_v <= tlb_w_v0;
+        tlbelo0_d <= tlb_w_d0;
+        tlbelo0_plv <= tlb_w_plv0;
+        tlbelo0_mat <= tlb_w_mat0;
+        tlbelo0_g <= tlb_w_g;
+        tlbelo0_ppn <= tlb_w_ppn0;
+    end
+    else if(csr_we && csr_num == `CSR_TLBELO0)begin
+        tlbelo0_v <= csr_wmask[`TLBELO_V] & csr_wvalue[`TLBELO_V]
+                      | ~csr_wmask[`TLBELO_V] & tlbelo0_v;
+        tlbelo0_d <= csr_wmask[`TLBELO_D] & csr_wvalue[`TLBELO_D]
+                      | ~csr_wmask[`TLBELO_D] & tlbelo0_d;
+        tlbelo0_plv <= csr_wmask[`TLBELO_PLV] & csr_wvalue[`TLBELO_PLV]
+                      | ~csr_wmask[`TLBELO_PLV] & tlbelo0_plv;
+        tlbelo0_mat <= csr_wmask[`TLBELO_MAT] & csr_wvalue[`TLBELO_MAT]
+                      | ~csr_wmask[`TLBELO_MAT] & tlbelo0_mat;
+        tlbelo0_g <= csr_wmask[`TLBELO_G] & csr_wvalue[`TLBELO_G]
+                      | ~csr_wmask[`TLBELO_G] & tlbelo0_g;
+        tlbelo0_ppn <= csr_wmask[`TLBELO_PPN] & csr_wvalue[`TLBELO_PPN]
+                      | ~csr_wmask[`TLBELO_PPN] & tlbelo0_ppn;
+    end
+end
+assign csr_tlbelo0_rvalue = {4'b0, tlbelo0_ppn, 1'b0, tlbelo0_mat, tlbelo0_plv, tlbelo0_d, tlbelo0_v};
+reg tlbelo1_v, tlbelo1_d, tlbelo1_g;
+reg [1:0] tlbelo1_plv, tlbelo1_mat;
+reg [19:0] tlbelo1_ppn;
+assign tlb_r_v1 = tlbelo1_v;
+assign tlb_r_d1 = tlbelo1_d;
+assign tlb_r_plv1 = tlbelo1_plv;
+assign tlb_r_mat1 = tlbelo1_mat;
+assign tlb_r_g = tlbelo1_g;
+assign tlb_r_ppn1 = tlbelo1_ppn;
+always @(posedge clk) begin
+    if(tlb_rd)begin
+        tlbelo1_v <= tlb_w_v1;
+        tlbelo1_d <= tlb_w_d1;
+        tlbelo1_plv <= tlb_w_plv1;
+        tlbelo1_mat <= tlb_w_mat1;
+        tlbelo1_g <= tlb_w_g;
+        tlbelo1_ppn <= tlb_w_ppn1;
+    end
+    else if(csr_we && csr_num == `CSR_TLBELO1)begin
+        tlbelo1_v <= csr_wmask[`TLBELO_V] & csr_wvalue[`TLBELO_V]
+                      | ~csr_wmask[`TLBELO_V] & tlbelo1_v;
+        tlbelo1_d <= csr_wmask[`TLBELO_D] & csr_wvalue[`TLBELO_D]
+                      | ~csr_wmask[`TLBELO_D] & tlbelo1_d;
+        tlbelo1_plv <= csr_wmask[`TLBELO_PLV] & csr_wvalue[`TLBELO_PLV]
+                      | ~csr_wmask[`TLBELO_PLV] & tlbelo1_plv;
+        tlbelo1_mat <= csr_wmask[`TLBELO_MAT] & csr_wvalue[`TLBELO_MAT]
+                      | ~csr_wmask[`TLBELO_MAT] & tlbelo1_mat;
+        tlbelo1_g <= csr_wmask[`TLBELO_G] & csr_wvalue[`TLBELO_G]
+                      | ~csr_wmask[`TLBELO_G] & tlbelo1_g;
+        tlbelo1_ppn <= csr_wmask[`TLBELO_PPN] & csr_wvalue[`TLBELO_PPN]
+                      | ~csr_wmask[`TLBELO_PPN] & tlbelo1_ppn;
+    end
+
+end
+assign csr_tlbelo1_rvalue = {4'b0, tlbelo1_ppn, 1'b0, tlbelo1_mat, tlbelo1_plv, tlbelo1_d, tlbelo1_v};
 
 // ASID
 // 9-0 ASID 取指、访存、srch、wr、fill读，rd写
 // 23-16 ASIDBITS=8'd10
+reg [9:0] asid_asid;
+reg [7:0] asid_asidbits;
+always @(posedge clk) begin
+    if(rst)
+        asid_asidbits <= 8'd10;
+    else if(csr_we && csr_num == `CSR_ASID)begin
+        asid_asidbits <= csr_wmask[`ASID_BITS] & csr_wvalue[`ASID_BITS]
+                      | ~csr_wmask[`ASID_BITS] & asid_asidbits;
+    end
+end
+always @(posedge clk) begin
+    if(tlb_rd)begin
+        asid_asid <= tlb_w_asid;
+    end
+    else if(csr_we && csr_num == `CSR_ASID)begin
+        asid_asid <= csr_wmask[`ASID_ASID] & csr_wvalue[`ASID_ASID]
+                      | ~csr_wmask[`ASID_ASID] & asid_asid;
+    end
+end
+assign tlb_r_asid = asid_asid;
+assign csr_asid_rvalue = {8'b0, asid_asidbits, 6'b0, asid_asid};
 
 // TLBRENTRY
 // 31-6 PA TLB重填例外入口地址31-6位
+reg [25:0] tlbrentry_pa;
+always @(posedge clk) begin
+    if(csr_we && csr_num == `CSR_TLBRENTRY)begin
+        tlbrentry_pa <= csr_wmask[`TLBRENTRY_PA] & csr_wvalue[`TLBRENTRY_PA]
+                      | ~csr_wmask[`TLBRENTRY_PA] & tlbrentry_pa;
+    end
+end
+assign csr_tlbrentry_rvalue = {tlbrentry_pa, 6'b0};
+//TODO: complete it considering port ertn_pc
+
+//复位：所有实现的CSR.DMW中的PLV0、PLV3均为0；
 
 endmodule

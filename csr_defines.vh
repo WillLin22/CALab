@@ -6,6 +6,11 @@
 `define CSR_ERA 14'h6
 `define CSR_BADV 14'h7
 `define CSR_EENTRY 14'hc
+`define CSR_TLBIDX 14'h10
+`define CSR_TLBEHI 14'h11
+`define CSR_TLBELO0 14'h12
+`define CSR_TLBELO1 14'h13
+`define CSR_ASID    14'h18
 `define CSR_SAVE0 14'h30
 `define CSR_SAVE1 14'h31
 `define CSR_SAVE2 14'h32
@@ -16,6 +21,7 @@
 `define CSR_TICLR 14'h44
 `define CSR_STABLE_COUNTER_HI 14'h45
 `define CSR_STABLE_COUNTER_LO 14'h46
+`define CSR_TLBRENTRY 14'h88
 
 
 //CSR分区
@@ -94,3 +100,26 @@
 //ESUBCODE
 `define ESUBCODE_ADEF 9'h0
 `define ESUBCODE_ADEM 9'h1
+
+//TLBIDX
+`define TLBIDX_IDX 3:0
+`define TLBIDX_PS  29:24
+`define TLBIDX_NE  31
+
+//TLBEHI
+`define TLBEHI_VPPN 31:13
+
+//TLBELO
+`define TLBELO_PPN 27:8
+`define TLBELO_G 6
+`define TLBELO_MAT 5:4
+`define TLBELO_PLV 3:2
+`define TLBELO_D 1
+`define TLBELO_V 0
+
+//ASID
+`define ASID_ASID 9:0
+`define ASID_BITS 23:16
+
+//TLBRENTRY
+`define TLBRENTRY_PA 31:6
