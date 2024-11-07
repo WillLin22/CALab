@@ -1,5 +1,9 @@
 `include "csr_defines.vh"
-module mycpu_core(
+module mycpu_core
+#(
+    parameter TLBNUM = 16
+)
+(
     input  wire        clk,
     input  wire        resetn,
 
@@ -195,6 +199,114 @@ wire effectful_IF, effectful_ID, effectful_EX, effectful_MEM, effectful_WB;
 
 reg [31:0] nextpc_reg;
 reg not_accepted;
+//exp18
+wire we_ID;//ID阶段产生的对应csr的we接口的信号
+wire [3:0] wop_ID;//ID阶段产生的对应csr的wop接口的信号
+
+//csr的tlb接口
+//write
+wire                        csr_in_tlb_w_we;
+wire [3:0]                  csr_in_tlb_w_op;
+wire                        csr_in_tlb_w_e;
+wire [$clog2(TLBNUM)-1:0]   csr_in_tlb_w_idx;
+wire [18:0]                 csr_in_tlb_w_vppn;
+wire [ 5:0]                 csr_in_tlb_w_ps;
+wire [ 9:0]                 csr_in_tlb_w_asid;
+wire                        csr_in_tlb_w_g;
+wire [19:0]                 csr_in_tlb_w_ppn0;
+wire [ 1:0]                 csr_in_tlb_w_plv0;
+wire [ 1:0]                 csr_in_tlb_w_mat0;
+wire                        csr_in_tlb_w_d0;
+wire                        csr_in_tlb_w_v0;       
+wire [19:0]                 csr_in_tlb_w_ppn1;
+wire [ 1:0]                 csr_in_tlb_w_plv1;
+wire [ 1:0]                 csr_in_tlb_w_mat1;
+wire                        csr_in_tlb_w_d1;
+wire                        csr_in_tlb_w_v1;
+wire                        csr_out_tlb_r_e;
+wire [$clog2(TLBNUM)-1:0]   csr_out_tlb_r_idx;
+wire [18:0]                 csr_out_tlb_r_vppn;
+wire [ 5:0]                 csr_out_tlb_r_ps;
+wire [ 9:0]                 csr_out_tlb_r_asid;
+wire                        csr_out_tlb_r_g;
+wire [19:0]                 csr_out_tlb_r_ppn0;
+wire [ 1:0]                 csr_out_tlb_r_plv0;
+wire [ 1:0]                 csr_out_tlb_r_mat0;
+wire                        csr_out_tlb_r_d0;
+wire                        csr_out_tlb_r_v0;
+wire [19:0]                 csr_out_tlb_r_ppn1;
+wire [ 1:0]                 csr_out_tlb_r_plv1;
+wire [ 1:0]                 csr_out_tlb_r_mat1;
+wire                        csr_out_tlb_r_d1;
+wire                        csr_out_tlb_r_v1;
+//tlb接口
+wire [18:0]                 tlb_in_s0_vppn;
+wire                        tlb_in_s0_va_bit12;
+wire [ 9:0]                 tlb_in_s0_asid;
+wire                        tlb_out_s0_found;
+wire [$clog2(TLBNUM)-1:0]   tlb_out_s0_idx;
+wire [19:0]                 tlb_out_s0_ppn;
+wire [ 5:0]                 tlb_out_s0_ps;
+wire [ 1:0]                 tlb_out_s0_plv;
+wire [ 1:0]                 tlb_out_s0_mat;
+wire                        tlb_out_s0_d;
+wire                        tlb_out_s0_v;
+wire [18:0]                 tlb_in_s1_vppn;
+wire                        tlb_in_s1_va_bit12;
+wire [ 9:0]                 tlb_in_s1_asid;
+wire                        tlb_out_s1_found;
+wire [$clog2(TLBNUM)-1:0]   tlb_out_s1_idx;
+wire [19:0]                 tlb_out_s1_ppn;
+wire [ 5:0]                 tlb_out_s1_ps;
+wire [ 1:0]                 tlb_out_s1_plv;
+wire [ 1:0]                 tlb_out_s1_mat;
+wire                        tlb_out_s1_d;
+wire                        tlb_out_s1_v;
+//invtlb
+wire                        tlb_in_invtlb_valid;
+wire [4:0]                  tlb_in_invtlb_op;
+wire [9:0]                  tlb_in_invtlb_asid;
+wire [18:0]                 tlb_in_invtlb_va;
+//write
+wire                        tlb_in_we;
+wire [$clog2(TLBNUM)-1:0]   tlb_in_w_idx;
+wire                        tlb_in_w_e;
+wire [18:0]                 tlb_in_w_vppn;
+wire [ 5:0]                 tlb_in_w_ps;
+wire [ 9:0]                 tlb_in_w_asid;
+wire                        tlb_in_w_g;
+wire [19:0]                 tlb_in_w_ppn0;
+wire [ 1:0]                 tlb_in_w_plv0;
+wire [ 1:0]                 tlb_in_w_mat0;
+wire                        tlb_in_w_d0;
+wire                        tlb_in_w_v0;
+wire [19:0]                 tlb_in_w_ppn1;
+wire [ 1:0]                 tlb_in_w_plv1;
+wire [ 1:0]                 tlb_in_w_mat1;
+wire                        tlb_in_w_d1;
+wire                        tlb_in_w_v1;
+//read
+wire [$clog2(TLBNUM)-1:0]   tlb_in_r_idx;
+wire                        tlb_out_r_e;
+wire [18:0]                 tlb_out_r_vppn;
+wire [ 5:0]                 tlb_out_r_ps;
+wire [ 9:0]                 tlb_out_r_asid;
+wire                        tlb_out_r_g;
+wire [19:0]                 tlb_out_r_ppn0;
+wire [ 1:0]                 tlb_out_r_plv0;
+wire [ 1:0]                 tlb_out_r_mat0;
+wire                        tlb_out_r_d0;
+wire                        tlb_out_r_v0;
+wire [19:0]                 tlb_out_r_ppn1;
+wire [ 1:0]                 tlb_out_r_plv1;
+wire [ 1:0]                 tlb_out_r_mat1;
+wire                        tlb_out_r_d1;
+wire                        tlb_out_r_v1;
+//tlbsrch
+wire [18:0]                 tlb_in_srch_vppn;
+wire [ 9:0]                 tlb_in_srch_asid;
+wire                        tlb_out_srch_found;
+wire [$clog2(TLBNUM)-1:0]   tlb_out_srch_idx;
 //新的定义的线或接口的声明写这里
 
 
@@ -214,7 +326,7 @@ reg [31:0] pc_ID;
 reg [31:0] instreg_IF;//取指阶段若dataok到来时未握手则暂存指令
 reg [31:0] inst_ID;//ID阶段的译码指令
 wire [31:0] mem_wdata_ID;
-reg [31:0] alu_src1_EX, alu_src2_EX, rj_value_EX, rkd_value_EX, mem_wdata_EX, pc_EX, br_target_EX;
+reg [31:0] alu_src1_EX, alu_src2_EX, rj_value_EX,rj_value_MEM, rj_value_WB, rkd_value_EX,rkd_value_MEM, rkd_value_WB, mem_wdata_EX, pc_EX, br_target_EX;//exp18 update:增加了rj_value_MEM, rj_value_WB, rkd_value_MEM, rkd_value_WB
 reg [14:0] alu_op_EX;
 reg [4:0] dest_EX;
 reg mem_we_EX;
@@ -266,6 +378,12 @@ reg ertn_flush_EX,      ertn_flush_MEM,     ertn_flush_WB;
 reg flush_all_EX,       flush_all_MEM,      flush_all_WB;
 reg [31:0] csr_wvalue_MEM, csr_wvalue_WB;
 reg [31:0] vaddr_MEM,   vaddr_WB;
+
+//exp18
+reg invtlb_EX, invtlb_MEM, invtlb_WB;
+reg we_EX, we_MEM, we_WB;
+reg [3:0] wop_EX, wop_MEM, wop_WB;
+
 
 //新的添加的通路声明放这里
 //--  inst decode for ID
@@ -436,12 +554,7 @@ assign mem_we        = inst_st_w|inst_st_b|inst_st_h;
 assign dest          = dst_is_r1 ? 5'd1 : 
                       dst_is_rj ? rj : rd;
 
-//CSR 通路起点
-assign csr_num_ID       = csrr_is_rdcnts ? csrr_rdcnts_num : inst_ID[23:10];
-assign code_ID          = inst_ID[14:0];
-assign csr_re_ID        = inst_csrrd | inst_csrwr | inst_csrxchg | inst_rdcntid | inst_rdcntvl_w | inst_rdcntvh_w;
-assign csr_write_ID     = inst_csrwr || inst_csrxchg;
-assign csr_wmask_ID     = inst_csrxchg ? rj_value : {32{inst_csrwr}};  //mask <-- rj
+
 
 assign  mem_wdata_ID = rkd_value;
 
@@ -480,28 +593,16 @@ assign br_target = (inst_beq || inst_bne || inst_bl || inst_b || inst_blt || ins
 
 assign alu_src1 = src1_is_pc  ? pc_ID[31:0] : rj_value;
 assign alu_src2 = src2_is_imm ? imm : rkd_value;
-always @(posedge clk) begin
-    if(reset)
-        data_sram_rdata_reg <= 32'b0;
-    else if(data_ok_mem)
-        data_sram_rdata_reg <= data_sram_rdata;
-end
+//CSR 通路起点
+assign csr_num_ID       = csrr_is_rdcnts ? csrr_rdcnts_num : inst_ID[23:10];
+assign code_ID          = inst_ID[14:0];
+assign csr_re_ID        = inst_csrrd | inst_csrwr | inst_csrxchg | inst_rdcntid | inst_rdcntvl_w | inst_rdcntvh_w;
+assign csr_write_ID     = inst_csrwr || inst_csrxchg;
+assign csr_wmask_ID     = inst_csrxchg ? rj_value : {32{inst_csrwr}};  //mask <-- rj
 
-assign mem_rdata_w = data_sram_rdata_reg;
-assign mem_rdata_h = mem_offset_d[2] ? data_sram_rdata_reg[31:16] :data_sram_rdata_reg[15:0];
-assign mem_rdata_b = {{8{mem_offset_d[0]}} & data_sram_rdata_reg[7:0]} | {{8{mem_offset_d[1]}} & data_sram_rdata_reg[15:8]} |
-                    {{8{mem_offset_d[2]}} & data_sram_rdata_reg[23:16]} | {{8{mem_offset_d[3]}} & data_sram_rdata_reg[31:24]};
-
-assign mem_result   = mem_byte_MEM ? {{24{mem_signed_MEM & mem_rdata_b[7]}}, mem_rdata_b[7:0]} :
-                      mem_half_MEM ? {{16{mem_signed_MEM & mem_rdata_h[15]}}, mem_rdata_h[15:0]} :
-                    mem_rdata_w;
-
-
-//--  debug info generate
-assign debug_wb_pc       = pc_WB;
-assign debug_wb_rf_we   = {4{rf_we}};
-assign debug_wb_rf_wnum  = rf_waddr;
-assign debug_wb_rf_wdata = rf_wdata;
+//exp18
+assign wop_ID = {inst_tlbfill, inst_tlbwr, inst_tlbrd, inst_tlbsrch};
+assign we_ID = inst_tlbrd | inst_tlbsrch;
 
 //--  Waterflow
 //IF, ID, EX, MEM, WB
@@ -688,6 +789,10 @@ always @(posedge clk) begin
         exc_ine_EX <= 1'b0;
         exc_int_EX <= 1'b0;
         exc_break_EX     <= 1'b0;
+        //exp18
+        we_EX <= 1'b0;
+        wop_EX <= 4'b0;
+        invtlb_EX <= 1'b0;
     end
     else if(handshake_ID_EX)begin
         alu_src1_EX <= alu_src1;
@@ -729,7 +834,10 @@ always @(posedge clk) begin
         exc_adef_EX <= exc_adef_ID;
         exc_int_EX <= has_int;
         exc_break_EX <= inst_break;
-
+        //exp18
+        we_EX <= we_ID;
+        wop_EX <= wop_ID;
+        invtlb_EX <= inst_invtlb;
     end
     else if(ertn_flush_WB)
         ertn_flush_EX <= 1'b0;
@@ -836,6 +944,9 @@ always @(posedge clk) begin
         dest_MEM <= 5'b0;
         result_all_MEM <= 32'b0;
         pc_MEM <= 32'b0;
+        //exp18 added
+        rj_value_MEM <= 32'b0;
+        rkd_value_MEM <= 32'b0;
 
         data_sram_en_MEM <= 1'b0;
         data_sram_we_MEM <= 4'b0;
@@ -866,6 +977,10 @@ always @(posedge clk) begin
         exc_int_MEM <= 1'b0;
         exc_ale_MEM <= 1'b0;
         exc_break_MEM <= 1'b0;
+        //exp18
+        we_MEM <= 1'b0;
+        wop_MEM <= 4'b0;
+        invtlb_MEM <= 1'b0;
     end
     else if(handshake_EX_MEM)begin
         res_from_mem_MEM <= res_from_mem_EX;
@@ -873,6 +988,9 @@ always @(posedge clk) begin
         result_all_MEM <= result_all;    
         dest_MEM <= dest_EX;
         pc_MEM <= pc_EX;
+        //exp18 added
+        rj_value_MEM <= rj_value_EX;
+        rkd_value_MEM <= rkd_value_EX;
 
         data_sram_en_MEM <= data_sram_en_EX;
         data_sram_we_MEM <= data_sram_we_EX;
@@ -903,7 +1021,10 @@ always @(posedge clk) begin
         exc_int_MEM <= exc_int_EX;
         exc_ale_MEM <= ALE_EX;
         exc_break_MEM <= exc_break_EX;
-
+        //exp18
+        we_MEM <= we_EX;
+        wop_MEM <= wop_EX;
+        invtlb_MEM <= invtlb_EX;
     end
     else if(ertn_flush_WB)
         ertn_flush_MEM <= 1'b0;
@@ -942,6 +1063,21 @@ assign data_sram_we_EX    = mem_we_EX? {mem_word_EX|(mem_half_EX&mem_offset[1])|
                                     ,mem_word_EX|(mem_half_EX&~mem_offset[1])|(mem_byte_EX&~mem_offset[1]&~mem_offset[0])}//! half/byte的写入掩码与offset有关
                                     : 4'b0;
 assign data_sram_addr_EX  = alu_result[31:0];
+always @(posedge clk) begin
+    if(reset)
+        data_sram_rdata_reg <= 32'b0;
+    else if(data_ok_mem)
+        data_sram_rdata_reg <= data_sram_rdata;
+end
+
+assign mem_rdata_w = data_sram_rdata_reg;
+assign mem_rdata_h = mem_offset_d[2] ? data_sram_rdata_reg[31:16] :data_sram_rdata_reg[15:0];
+assign mem_rdata_b = {{8{mem_offset_d[0]}} & data_sram_rdata_reg[7:0]} | {{8{mem_offset_d[1]}} & data_sram_rdata_reg[15:8]} |
+                    {{8{mem_offset_d[2]}} & data_sram_rdata_reg[23:16]} | {{8{mem_offset_d[3]}} & data_sram_rdata_reg[31:24]};
+
+assign mem_result   = mem_byte_MEM ? {{24{mem_signed_MEM & mem_rdata_b[7]}}, mem_rdata_b[7:0]} :
+                      mem_half_MEM ? {{16{mem_signed_MEM & mem_rdata_h[15]}}, mem_rdata_h[15:0]} :
+                    mem_rdata_w;
 
 assign ALE_EX = mem_en && (mem_word_EX&& |alu_result[1:0] || mem_half_EX&&alu_result[0]);//访存错误：地址非对齐
 
@@ -966,6 +1102,9 @@ always @(posedge clk) begin
         pc_WB <= 32'b0;
         dest_WB <= 5'b0;
         rf_we_WB <= 1'b0;
+        //exp18 added
+        rj_value_WB <= 32'b0;
+        rkd_value_WB <= 32'b0;
 
         csr_num_WB <= 14'b0;
         exc_syscall_WB <= 1'b0;
@@ -984,13 +1123,19 @@ always @(posedge clk) begin
         exc_ine_WB <= 1'b0;
         exc_ale_WB <= 1'b0;
         exc_break_WB <= 1'b0;
-
+        //exp18
+        we_WB <= 1'b0;
+        wop_WB <= 4'b0;
+        invtlb_WB <= 1'b0;
     end
     else if(handshake_MEM_WB) begin
         final_result_WB <= final_result_MEM;
         pc_WB <= pc_MEM;
         dest_WB <= dest_MEM;
         rf_we_WB <= rf_we_MEM;
+        //exp18 added
+        rj_value_WB <= rj_value_MEM;
+        rkd_value_WB <= rkd_value_MEM;
 
         csr_num_WB <= csr_num_MEM;
         exc_syscall_WB <= exc_syscall_MEM;
@@ -1009,7 +1154,10 @@ always @(posedge clk) begin
         exc_ine_WB <= exc_ine_MEM;
         exc_ale_WB <= exc_ale_MEM;
         exc_break_WB <= exc_break_MEM;
-
+        //exp18
+        we_WB <= we_MEM;
+        wop_WB <= wop_MEM;
+        invtlb_WB <= invtlb_MEM;
     end
     else if(ertn_flush_WB)
         ertn_flush_WB <= 1'b0;
@@ -1046,6 +1194,11 @@ regfile u_regfile(
     .waddr  (rf_waddr ),
     .wdata  (rf_wdata )
     );
+//--  debug info generate
+assign debug_wb_pc       = pc_WB;
+assign debug_wb_rf_we   = {4{rf_we}};
+assign debug_wb_rf_wnum  = rf_waddr;
+assign debug_wb_rf_wdata = rf_wdata;
 
 always @(posedge clk) begin
     if (reset) begin
@@ -1087,6 +1240,30 @@ assign wb_ecode = exc_int_WB ? `ECODE_INT : //异常类型
 assign wb_esubcode = exc_adef_WB ? `ESUBCODE_ADEF : 9'h0;
 assign wb_pc = pc_WB;// 来自WB级的异常发生地址
 assign wb_vaddr = vaddr_WB;// 来自WB级的异常发生地址
+
+//exp18
+wire wop_srch = wop_WB[0];
+wire wop_rd   = wop_WB[1];
+wire wop_wr   = wop_WB[2];
+wire wop_fill = wop_WB[3];
+assign csr_in_tlb_w_we = we_WB&effectful_WB;
+assign csr_in_tlb_w_op = wop_WB;
+assign csr_in_tlb_w_e  = wop_srch & (tlb_out_srch_found ? 1'b1 : 1'b0) | wop_rd & tlb_out_r_e;
+assign csr_in_tlb_w_idx= tlb_out_srch_idx;
+assign csr_in_tlb_w_vppn    = tlb_out_r_e ? tlb_out_r_vppn : 19'b0;
+assign csr_in_tlb_w_ps      = tlb_out_r_e ? tlb_out_r_ps   : 6'b0;
+assign csr_in_tlb_w_asid    = tlb_out_r_e ? tlb_out_r_asid : 10'b0;
+assign csr_in_tlb_w_g       = tlb_out_r_e ? tlb_out_r_g    : 1'b0;
+assign csr_in_tlb_w_ppn0    = tlb_out_r_e ? tlb_out_r_ppn0 : 20'b0;
+assign csr_in_tlb_w_plv0    = tlb_out_r_e ? tlb_out_r_plv0 : 2'b0;
+assign csr_in_tlb_w_mat0    = tlb_out_r_e ? tlb_out_r_mat0 : 2'b0;
+assign csr_in_tlb_w_d0      = tlb_out_r_e ? tlb_out_r_d0   : 1'b0;
+assign csr_in_tlb_w_v0      = tlb_out_r_e ? tlb_out_r_v0   : 1'b0;
+assign csr_in_tlb_w_ppn1    = tlb_out_r_e ? tlb_out_r_ppn1 : 20'b0;
+assign csr_in_tlb_w_plv1    = tlb_out_r_e ? tlb_out_r_plv1 : 2'b0;
+assign csr_in_tlb_w_mat1    = tlb_out_r_e ? tlb_out_r_mat1 : 2'b0;
+assign csr_in_tlb_w_d1      = tlb_out_r_e ? tlb_out_r_d1   : 1'b0;
+assign csr_in_tlb_w_v1      = tlb_out_r_e ? tlb_out_r_v1   : 1'b0;
 csr u_csr(
     .clk                (clk),
     .rst              (reset),
@@ -1107,7 +1284,44 @@ csr u_csr(
     .wb_ecode           (wb_ecode),
     .wb_esubcode        (wb_esubcode),
     .wb_pc              (wb_pc),         
-    .wb_vaddr           (wb_vaddr)    
+    .wb_vaddr           (wb_vaddr),
+    //exp18 
+    //write   
+    .tlb_w_we           (csr_in_tlb_w_we),
+    .tlb_w_op           (csr_in_tlb_w_op),
+    .tlb_w_e            (csr_in_tlb_w_e),
+    .tlb_w_idx          (csr_in_tlb_w_idx),
+    .tlb_w_vppn         (csr_in_tlb_w_vppn),
+    .tlb_w_ps           (csr_in_tlb_w_ps),
+    .tlb_w_asid         (csr_in_tlb_w_asid),
+    .tlb_w_g            (csr_in_tlb_w_g),
+    .tlb_w_ppn0         (csr_in_tlb_w_ppn0),
+    .tlb_w_plv0         (csr_in_tlb_w_plv0),
+    .tlb_w_mat0         (csr_in_tlb_w_mat0),
+    .tlb_w_d0           (csr_in_tlb_w_d0),
+    .tlb_w_v0           (csr_in_tlb_w_v0),
+    .tlb_w_ppn1         (csr_in_tlb_w_ppn1),
+    .tlb_w_plv1         (csr_in_tlb_w_plv1),
+    .tlb_w_mat1         (csr_in_tlb_w_mat1),
+    .tlb_w_d1           (csr_in_tlb_w_d1),
+    .tlb_w_v1           (csr_in_tlb_w_v1),
+    //read
+    .tlb_r_e            (csr_out_tlb_r_e),
+    .tlb_r_idx          (csr_out_tlb_r_idx),
+    .tlb_r_vppn         (csr_out_tlb_r_vppn),
+    .tlb_r_ps           (csr_out_tlb_r_ps),
+    .tlb_r_asid         (csr_out_tlb_r_asid),
+    .tlb_r_g            (csr_out_tlb_r_g),
+    .tlb_r_ppn0         (csr_out_tlb_r_ppn0),
+    .tlb_r_plv0         (csr_out_tlb_r_plv0),
+    .tlb_r_mat0         (csr_out_tlb_r_mat0),
+    .tlb_r_d0           (csr_out_tlb_r_d0),
+    .tlb_r_v0           (csr_out_tlb_r_v0),
+    .tlb_r_ppn1         (csr_out_tlb_r_ppn1),
+    .tlb_r_plv1         (csr_out_tlb_r_plv1),
+    .tlb_r_mat1         (csr_out_tlb_r_mat1),
+    .tlb_r_d1           (csr_out_tlb_r_d1),
+    .tlb_r_v1           (csr_out_tlb_r_v1)
 );
 
 assign csrr_is_rdcnts = inst_rdcntid | inst_rdcntvl_w | inst_rdcntvh_w;
@@ -1206,5 +1420,113 @@ assign effectful_ID = valid_ID & ~ex_ID & ~flush_all & ~flush_all_ID &~WAR;//写
 assign effectful_EX = valid_EX & ~flush_all & ~flush_all_EX;
 assign effectful_MEM = valid_MEM & ~flush_all & ~flush_all_MEM;
 assign effectful_WB = valid_WB & ~flush_all & ~flush_all_WB;
+
+//exp18
+assign tlb_in_invtlb_valid = invtlb_WB & effectful_WB;
+assign tlb_in_invtlb_op = dest_WB;
+assign tlb_in_invtlb_asid = invtlb_op[2] ? rj_value_WB[9:0] : 9'b0;
+assign tlb_in_invtlb_va   = invtlb_op[2]&(|invtlb_op[1:0]) ? rkd_value_WB[31:13] : 19'b0;
+
+assign tlb_in_we = (|wop_WB[3:2]) & effectful_WB;
+assign tlb_in_w_idx = wop_WB[3] ? csr_out_tlb_r_idx : tlbidx_alloc;
+tlb_idx_alloc u_tlb_idx_alloc(
+    .tlballoc(wop_WB[3] & effectful_WB),
+    .tlbidx(tlbidx_alloc)
+);
+assign tlb_in_w_e       = csr_out_tlb_r_e;
+assign tlb_in_w_vppn    = csr_out_tlb_r_vppn;
+assign tlb_in_w_ps      = csr_out_tlb_r_ps;
+assign tlb_in_w_asid    = csr_out_tlb_r_asid;
+assign tlb_in_w_g       = csr_out_tlb_r_g;
+assign tlb_in_w_ppn0    = csr_out_tlb_r_ppn0;
+assign tlb_in_w_plv0    = csr_out_tlb_r_plv0;
+assign tlb_in_w_mat0    = csr_out_tlb_r_mat0;
+assign tlb_in_w_d0      = csr_out_tlb_r_d0;
+assign tlb_in_w_v0      = csr_out_tlb_r_v0;
+assign tlb_in_w_ppn1    = csr_out_tlb_r_ppn1;
+assign tlb_in_w_plv1    = csr_out_tlb_r_plv1;
+assign tlb_in_w_mat1    = csr_out_tlb_r_mat1;
+assign tlb_in_w_d1      = csr_out_tlb_r_d1;
+assign tlb_in_w_v1      = csr_out_tlb_r_v1;
+
+assign tlb_in_r_idx     = csr_out_tlb_r_idx;
+
+assign tlb_in_srch_vppn = csr_out_tlb_r_vppn;
+assign tlb_in_srch_asid = csr_out_tlb_r_asid;
+
+tlb u_tlb(
+    .clk            (clk),
+    //searchport0(for fetch)
+    .s0_vppn        (tlb_in_s0_vppn),
+    .s0_va_bit12    (tlb_in_s0_va_bit12),
+    .s0_asid        (tlb_in_s0_asid),
+    .s0_found       (tlb_out_s0_found),
+    .s0_index       (tlb_out_s0_idx),
+    .s0_ppn         (tlb_out_s0_ppn),
+    .s0_ps          (tlb_out_s0_ps),
+    .s0_plv         (tlb_out_s0_plv),
+    .s0_mat         (tlb_out_s0_mat),
+    .s0_d           (tlb_out_s0_d),
+    .s0_v           (tlb_out_s0_v),
+    //searchport1(for load/store)
+    .s1_vppn        (tlb_in_s1_vppn),
+    .s1_va_bit12    (tlb_in_s1_va_bit12),
+    .s1_asid        (tlb_in_s1_asid),
+    .s1_found       (tlb_out_s1_found),
+    .s1_index       (tlb_out_s1_idx),
+    .s1_ppn         (tlb_out_s1_ppn),
+    .s1_ps          (tlb_out_s1_ps),
+    .s1_plv         (tlb_out_s1_plv),
+    .s1_mat         (tlb_out_s1_mat),
+    .s1_d           (tlb_out_s1_d),
+    .s1_v           (tlb_out_s1_v),
+    //invtlbopcode
+    .invtlb_valid   (tlb_in_invtlb_valid),
+    .invtlb_op      (tlb_in_invtlb_op),
+    .invtlb_asid    (tlb_in_invtlb_asid),
+    .invtlb_va      (tlb_in_invtlb_va),
+    //write ports
+    .we             (tlb_in_we),
+    .w_index        (tlb_in_w_idx),
+    .w_e            (tlb_in_w_e),
+    .w_vppn         (tlb_in_w_vppn),
+    .w_ps           (tlb_in_w_ps),
+    .w_asid         (tlb_in_w_asid),
+    .w_g            (tlb_in_w_g),
+    .w_ppn0         (tlb_in_w_ppn0),
+    .w_plv0         (tlb_in_w_plv0),
+    .w_mat0         (tlb_in_w_mat0),
+    .w_d0           (tlb_in_w_d0),
+    .w_v0           (tlb_in_w_v0),
+    .w_ppn1         (tlb_in_w_ppn1),
+    .w_plv1         (tlb_in_w_plv1),
+    .w_mat1         (tlb_in_w_mat1),
+    .w_d1           (tlb_in_w_d1),
+    .w_v1           (tlb_in_w_v1),
+    //read ports
+    .r_index        (tlb_in_r_idx),
+    .r_e            (tlb_out_r_e),
+    .r_vppn         (tlb_out_r_vppn),
+    .r_ps           (tlb_out_r_ps),
+    .r_asid         (tlb_out_r_asid),
+    .r_g            (tlb_out_r_g),
+    .r_ppn0         (tlb_out_r_ppn0),
+    .r_plv0         (tlb_out_r_plv0),
+    .r_mat0         (tlb_out_r_mat0),
+    .r_d0           (tlb_out_r_d0),
+    .r_v0           (tlb_out_r_v0),
+    .r_ppn1         (tlb_out_r_ppn1),
+    .r_plv1         (tlb_out_r_plv1),
+    .r_mat1         (tlb_out_r_mat1),
+    .r_d1           (tlb_out_r_d1),
+    .r_v1           (tlb_out_r_v1),
+    //tlbsrch
+    .tlbsrch_vppn   (tlb_in_srch_vppn),
+    .tlbsrch_asid   (tlb_in_srch_asid),
+    .tlbsrch_found  (tlb_in_srch_found),
+    .tlbsrch_index  (tlb_in_srch_index)
+
+    
+);
 
 endmodule

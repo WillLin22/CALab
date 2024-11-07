@@ -492,7 +492,7 @@ always @(posedge clk) begin
 end
 assign csr_tlbrentry_rvalue = {tlbrentry_pa, 6'b0};
 //TODO: complete it considering port ertn_pc
-
+assign tlb_r_TLBR = csr_estat_ecode == 6'h3F;
 //复位：所有实现的CSR.DMW中的PLV0、PLV3均为0；
 
 endmodule

@@ -524,3 +524,18 @@ assign mtch[14] = (s_vppn[18:10] == tlb_vppn_14[18:10]) && (tlb_ps4MB_14 || s_vp
 assign mtch[15] = (s_vppn[18:10] == tlb_vppn_15[18:10]) && (tlb_ps4MB_15 || s_vppn[9:0] == tlb_vppn_15[9:0]) && (s_asid == tlb_asid_15 || tlb_g_15);
 
 endmodule
+
+module tlb_idx_alloc
+#(
+    parameter TLBNUM = 16
+)
+(
+    input  wire tlballoc,
+    output wire [$clog2(TLBNUM)-1:0] idx
+);
+reg [$clog2(TLBNUM)-1:0] cnt;
+always @(posedge tlballoc) begin
+    cnt <= cnt + 1;
+end
+assign idx = cnt;
+endmodule
