@@ -81,7 +81,7 @@ invop:
 11: clear G==0
 100:clear G==0&&asid == asid
 101:clear G==0&&(asid == asid&&VA==VA)
-110:clear G==0||(asid == asid&&VA==VA)
+110:clear G==1||(asid == asid&&VA==VA)
  */
 
 reg [TLBNUM-1:0] tlb_e;
@@ -379,7 +379,7 @@ always @(posedge clk) begin
             end
             5'b00110:begin
                 for(i=0;i<TLBNUM;i=i+1)begin
-                    if(!tlb_g[i]||(tlb_asid[i]==invtlb_asid&&tlb_vppn[i]==invtlb_va))begin
+                    if((tlb_g[i]||tlb_asid[i]==invtlb_asid)&&tlb_vppn[i]==invtlb_va)begin
                         tlb_e[i] <= 1'b0;
                     end
                 end
@@ -506,22 +506,22 @@ wire [TLBNUM-1:0] mtch;
 assign match = |mtch;
 encoder_16_4 e(.in(mtch), .out(index));
 
-assign mtch[0] = (s_vppn[18:10] == tlb_vppn_0[18:10]) && (tlb_ps4MB_0 || s_vppn[9:0] == tlb_vppn_0[9:0]) && (s_asid == tlb_asid_0 || tlb_g_0);
-assign mtch[1] = (s_vppn[18:10] == tlb_vppn_1[18:10]) && (tlb_ps4MB_1 || s_vppn[9:0] == tlb_vppn_1[9:0]) && (s_asid == tlb_asid_1 || tlb_g_1);
-assign mtch[2] = (s_vppn[18:10] == tlb_vppn_2[18:10]) && (tlb_ps4MB_2 || s_vppn[9:0] == tlb_vppn_2[9:0]) && (s_asid == tlb_asid_2 || tlb_g_2);
-assign mtch[3] = (s_vppn[18:10] == tlb_vppn_3[18:10]) && (tlb_ps4MB_3 || s_vppn[9:0] == tlb_vppn_3[9:0]) && (s_asid == tlb_asid_3 || tlb_g_3);
-assign mtch[4] = (s_vppn[18:10] == tlb_vppn_4[18:10]) && (tlb_ps4MB_4 || s_vppn[9:0] == tlb_vppn_4[9:0]) && (s_asid == tlb_asid_4 || tlb_g_4);
-assign mtch[5] = (s_vppn[18:10] == tlb_vppn_5[18:10]) && (tlb_ps4MB_5 || s_vppn[9:0] == tlb_vppn_5[9:0]) && (s_asid == tlb_asid_5 || tlb_g_5);
-assign mtch[6] = (s_vppn[18:10] == tlb_vppn_6[18:10]) && (tlb_ps4MB_6 || s_vppn[9:0] == tlb_vppn_6[9:0]) && (s_asid == tlb_asid_6 || tlb_g_6);
-assign mtch[7] = (s_vppn[18:10] == tlb_vppn_7[18:10]) && (tlb_ps4MB_7 || s_vppn[9:0] == tlb_vppn_7[9:0]) && (s_asid == tlb_asid_7 || tlb_g_7);
-assign mtch[8] = (s_vppn[18:10] == tlb_vppn_8[18:10]) && (tlb_ps4MB_8 || s_vppn[9:0] == tlb_vppn_8[9:0]) && (s_asid == tlb_asid_8 || tlb_g_8);
-assign mtch[9] = (s_vppn[18:10] == tlb_vppn_9[18:10]) && (tlb_ps4MB_9 || s_vppn[9:0] == tlb_vppn_9[9:0]) && (s_asid == tlb_asid_9 || tlb_g_9);
-assign mtch[10] = (s_vppn[18:10] == tlb_vppn_10[18:10]) && (tlb_ps4MB_10 || s_vppn[9:0] == tlb_vppn_10[9:0]) && (s_asid == tlb_asid_10 || tlb_g_10);
-assign mtch[11] = (s_vppn[18:10] == tlb_vppn_11[18:10]) && (tlb_ps4MB_11 || s_vppn[9:0] == tlb_vppn_11[9:0]) && (s_asid == tlb_asid_11 || tlb_g_11);
-assign mtch[12] = (s_vppn[18:10] == tlb_vppn_12[18:10]) && (tlb_ps4MB_12 || s_vppn[9:0] == tlb_vppn_12[9:0]) && (s_asid == tlb_asid_12 || tlb_g_12);
-assign mtch[13] = (s_vppn[18:10] == tlb_vppn_13[18:10]) && (tlb_ps4MB_13 || s_vppn[9:0] == tlb_vppn_13[9:0]) && (s_asid == tlb_asid_13 || tlb_g_13);
-assign mtch[14] = (s_vppn[18:10] == tlb_vppn_14[18:10]) && (tlb_ps4MB_14 || s_vppn[9:0] == tlb_vppn_14[9:0]) && (s_asid == tlb_asid_14 || tlb_g_14);
-assign mtch[15] = (s_vppn[18:10] == tlb_vppn_15[18:10]) && (tlb_ps4MB_15 || s_vppn[9:0] == tlb_vppn_15[9:0]) && (s_asid == tlb_asid_15 || tlb_g_15);
+assign mtch[0] = (s_vppn[18:9] == tlb_vppn_0[18:9]) && (tlb_ps4MB_0 || s_vppn[8:0] == tlb_vppn_0[9:0]) && (s_asid == tlb_asid_0 || tlb_g_0);
+assign mtch[1] = (s_vppn[18:9] == tlb_vppn_1[18:9]) && (tlb_ps4MB_1 || s_vppn[8:0] == tlb_vppn_1[9:0]) && (s_asid == tlb_asid_1 || tlb_g_1);
+assign mtch[2] = (s_vppn[18:9] == tlb_vppn_2[18:9]) && (tlb_ps4MB_2 || s_vppn[8:0] == tlb_vppn_2[9:0]) && (s_asid == tlb_asid_2 || tlb_g_2);
+assign mtch[3] = (s_vppn[18:9] == tlb_vppn_3[18:9]) && (tlb_ps4MB_3 || s_vppn[8:0] == tlb_vppn_3[9:0]) && (s_asid == tlb_asid_3 || tlb_g_3);
+assign mtch[4] = (s_vppn[18:9] == tlb_vppn_4[18:9]) && (tlb_ps4MB_4 || s_vppn[8:0] == tlb_vppn_4[9:0]) && (s_asid == tlb_asid_4 || tlb_g_4);
+assign mtch[5] = (s_vppn[18:9] == tlb_vppn_5[18:9]) && (tlb_ps4MB_5 || s_vppn[8:0] == tlb_vppn_5[9:0]) && (s_asid == tlb_asid_5 || tlb_g_5);
+assign mtch[6] = (s_vppn[18:9] == tlb_vppn_6[18:9]) && (tlb_ps4MB_6 || s_vppn[8:0] == tlb_vppn_6[9:0]) && (s_asid == tlb_asid_6 || tlb_g_6);
+assign mtch[7] = (s_vppn[18:9] == tlb_vppn_7[18:9]) && (tlb_ps4MB_7 || s_vppn[8:0] == tlb_vppn_7[9:0]) && (s_asid == tlb_asid_7 || tlb_g_7);
+assign mtch[8] = (s_vppn[18:9] == tlb_vppn_8[18:9]) && (tlb_ps4MB_8 || s_vppn[8:0] == tlb_vppn_8[9:0]) && (s_asid == tlb_asid_8 || tlb_g_8);
+assign mtch[9] = (s_vppn[18:9] == tlb_vppn_9[18:9]) && (tlb_ps4MB_9 || s_vppn[8:0] == tlb_vppn_9[9:0]) && (s_asid == tlb_asid_9 || tlb_g_9);
+assign mtch[10] = (s_vppn[18:9] == tlb_vppn_10[18:9]) && (tlb_ps4MB_10 || s_vppn[8:0] == tlb_vppn_10[9:0]) && (s_asid == tlb_asid_10 || tlb_g_10);
+assign mtch[11] = (s_vppn[18:9] == tlb_vppn_11[18:9]) && (tlb_ps4MB_11 || s_vppn[8:0] == tlb_vppn_11[9:0]) && (s_asid == tlb_asid_11 || tlb_g_11);
+assign mtch[12] = (s_vppn[18:9] == tlb_vppn_12[18:9]) && (tlb_ps4MB_12 || s_vppn[8:0] == tlb_vppn_12[9:0]) && (s_asid == tlb_asid_12 || tlb_g_12);
+assign mtch[13] = (s_vppn[18:9] == tlb_vppn_13[18:9]) && (tlb_ps4MB_13 || s_vppn[8:0] == tlb_vppn_13[9:0]) && (s_asid == tlb_asid_13 || tlb_g_13);
+assign mtch[14] = (s_vppn[18:9] == tlb_vppn_14[18:9]) && (tlb_ps4MB_14 || s_vppn[8:0] == tlb_vppn_14[9:0]) && (s_asid == tlb_asid_14 || tlb_g_14);
+assign mtch[15] = (s_vppn[18:9] == tlb_vppn_15[18:9]) && (tlb_ps4MB_15 || s_vppn[8:0] == tlb_vppn_15[9:0]) && (s_asid == tlb_asid_15 || tlb_g_15);
 
 endmodule
 
@@ -530,12 +530,19 @@ module tlb_idx_alloc
     parameter TLBNUM = 16
 )
 (
+    input  wire rst,
+    input  wire clk,
     input  wire tlballoc,
     output wire [$clog2(TLBNUM)-1:0] idx
 );
 reg [$clog2(TLBNUM)-1:0] cnt;
-always @(posedge tlballoc) begin
-    cnt <= cnt + 1;
+always @(posedge clk) begin
+    if(rst)begin
+        cnt <= 4'b0;
+    end
+    else if(tlballoc)begin
+        cnt <= cnt + 1;
+    end
 end
 assign idx = cnt;
 endmodule

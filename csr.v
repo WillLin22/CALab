@@ -393,7 +393,6 @@ assign tlb_r_v0 = tlbelo0_v;
 assign tlb_r_d0 = tlbelo0_d;
 assign tlb_r_plv0 = tlbelo0_plv;
 assign tlb_r_mat0 = tlbelo0_mat;
-assign tlb_r_g = tlbelo0_g;
 assign tlb_r_ppn0 = tlbelo0_ppn;
 always @(posedge clk) begin
     if(tlb_rd)begin
@@ -419,7 +418,7 @@ always @(posedge clk) begin
                       | ~csr_wmask[`TLBELO_PPN] & tlbelo0_ppn;
     end
 end
-assign csr_tlbelo0_rvalue = {4'b0, tlbelo0_ppn, 1'b0, tlbelo0_mat, tlbelo0_plv, tlbelo0_d, tlbelo0_v};
+assign csr_tlbelo0_rvalue = {4'b0, tlbelo0_ppn, 1'b0, tlbelo0_g, tlbelo0_mat, tlbelo0_plv, tlbelo0_d, tlbelo0_v};
 reg tlbelo1_v, tlbelo1_d, tlbelo1_g;
 reg [1:0] tlbelo1_plv, tlbelo1_mat;
 reg [19:0] tlbelo1_ppn;
@@ -427,8 +426,8 @@ assign tlb_r_v1 = tlbelo1_v;
 assign tlb_r_d1 = tlbelo1_d;
 assign tlb_r_plv1 = tlbelo1_plv;
 assign tlb_r_mat1 = tlbelo1_mat;
-assign tlb_r_g = tlbelo1_g;
 assign tlb_r_ppn1 = tlbelo1_ppn;
+assign tlb_r_g = tlbelo0_g & tlbelo1_g;
 always @(posedge clk) begin
     if(tlb_rd)begin
         tlbelo1_v <= tlb_w_v1;
@@ -454,7 +453,7 @@ always @(posedge clk) begin
     end
 
 end
-assign csr_tlbelo1_rvalue = {4'b0, tlbelo1_ppn, 1'b0, tlbelo1_mat, tlbelo1_plv, tlbelo1_d, tlbelo1_v};
+assign csr_tlbelo1_rvalue = {4'b0, tlbelo1_ppn, 1'b0, tlbelo1_g, tlbelo1_mat, tlbelo1_plv, tlbelo1_d, tlbelo1_v};
 
 // ASID
 // 9-0 ASID 取指、访存、srch、wr、fill读，rd写
@@ -464,10 +463,6 @@ reg [7:0] asid_asidbits;
 always @(posedge clk) begin
     if(rst)
         asid_asidbits <= 8'd10;
-    else if(csr_we && csr_num == `CSR_ASID)begin
-        asid_asidbits <= csr_wmask[`ASID_BITS] & csr_wvalue[`ASID_BITS]
-                      | ~csr_wmask[`ASID_BITS] & asid_asidbits;
-    end
 end
 always @(posedge clk) begin
     if(tlb_rd)begin
