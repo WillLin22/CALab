@@ -201,9 +201,14 @@ wire effectful_IF, effectful_ID, effectful_EX, effectful_MEM, effectful_WB;
 reg [31:0] nextpc_reg;
 reg not_accepted;
 //exp18
-wire we_ID;//ID阶段产生的对应csr的we接口的信号
-wire [3:0] wop_ID;//ID阶段产生的对应csr的wop接口的信号
-//csr的tlb接口
+//ID阶段产生的对应csr的we接口的信号
+wire we_ID;
+//ID阶段产生的对应csr的wop接口的信号
+wire [3:0] wop_ID;
+//用于tlbfill指令中的分配一个新的tlb路。该线连接于模块tlballoc，定义于tlb.v中
+wire [$clog2(TLBNUM)-1:0]tlbidx_alloc;
+//为csr单独开的tlb接口，因为tlb相关操作会同时涉及多个csr的读写，没法复用先前的接口
+//带in的均为csr模块的input，带out的均为csr模块的output，以下tlb部分也是一样
 //write
 wire                        csr_in_tlb_w_we;
 wire [3:0]                  csr_in_tlb_w_op;
@@ -223,6 +228,7 @@ wire [ 1:0]                 csr_in_tlb_w_plv1;
 wire [ 1:0]                 csr_in_tlb_w_mat1;
 wire                        csr_in_tlb_w_d1;
 wire                        csr_in_tlb_w_v1;
+//read
 wire                        csr_out_tlb_r_e;
 wire [$clog2(TLBNUM)-1:0]   csr_out_tlb_r_idx;
 wire [18:0]                 csr_out_tlb_r_vppn;
@@ -240,6 +246,8 @@ wire [ 1:0]                 csr_out_tlb_r_mat1;
 wire                        csr_out_tlb_r_d1;
 wire                        csr_out_tlb_r_v1;
 //tlb接口
+//tlb为纯组合逻辑，不占时钟周期
+//s0对应instfetch部分，因为exp18还没有实现虚拟内存，因此只是定义好了tlb的接口并连上了tlb，但cpu端还没有连东西
 wire [18:0]                 tlb_in_s0_vppn;
 wire                        tlb_in_s0_va_bit12;
 wire [ 9:0]                 tlb_in_s0_asid;
@@ -251,6 +259,7 @@ wire [ 1:0]                 tlb_out_s0_plv;
 wire [ 1:0]                 tlb_out_s0_mat;
 wire                        tlb_out_s0_d;
 wire                        tlb_out_s0_v;
+//s1对应ld/store部分，同上，cpu端还没有连东西
 wire [18:0]                 tlb_in_s1_vppn;
 wire                        tlb_in_s1_va_bit12;
 wire [ 9:0]                 tlb_in_s1_asid;
@@ -262,13 +271,13 @@ wire [ 1:0]                 tlb_out_s1_plv;
 wire [ 1:0]                 tlb_out_s1_mat;
 wire                        tlb_out_s1_d;
 wire                        tlb_out_s1_v;
-//invtlb
+//用于invtlb指令，不出意外应该不会在exp19修改了我猜
 wire                        tlb_in_invtlb_valid;
 wire [4:0]                  tlb_in_invtlb_op;
 wire [9:0]                  tlb_in_invtlb_asid;
 wire [18:0]                 tlb_in_invtlb_va;
-//write
-wire                        tlb_in_we;
+//tlb写端口
+wire                        tlb_in_we;//写使能
 wire [$clog2(TLBNUM)-1:0]   tlb_in_w_idx;
 wire                        tlb_in_w_e;
 wire [18:0]                 tlb_in_w_vppn;
@@ -285,7 +294,7 @@ wire [ 1:0]                 tlb_in_w_plv1;
 wire [ 1:0]                 tlb_in_w_mat1;
 wire                        tlb_in_w_d1;
 wire                        tlb_in_w_v1;
-//read
+//tlb读端口，不占时钟周期
 wire [$clog2(TLBNUM)-1:0]   tlb_in_r_idx;
 wire                        tlb_out_r_e;
 wire [18:0]                 tlb_out_r_vppn;
@@ -303,10 +312,12 @@ wire [ 1:0]                 tlb_out_r_mat1;
 wire                        tlb_out_r_d1;
 wire                        tlb_out_r_v1;
 //tlbsrch
+//为tlbsrch指令单独开了以下四个端口
 wire [18:0]                 tlb_in_srch_vppn;
 wire [ 9:0]                 tlb_in_srch_asid;
 wire                        tlb_out_srch_found;
 wire [$clog2(TLBNUM)-1:0]   tlb_out_srch_idx;
+
 //新的定义的线或接口的声明写这里
 
 
@@ -634,7 +645,6 @@ end
 end
 assign seq_pc       = pc + 3'h4;
 assign inst_sram_wr = 1'b0;
-// assign nextpc       = exception_WB&&flush_all ? ex_entry : (ertn_flush_WB? ertn_pc : (br_taken & effectful_ID? br_target : seq_pc)); // 若中断，则进入中断处理入口；ertn 指令直到写回级才修改 CRMD，与此同时清空流水线并更新取�? PC�?
 assign nextpc = not_accepted &~flush_all ? nextpc_reg : (exception_WB&&flush_all ? ex_entry : (ertn_flush_WB? ertn_pc : (br_taken & effectful_ID? br_target : seq_pc)));
 assign inst_sram_req = ~IF_ADEF & req_inst;
 assign inst_sram_we = |inst_sram_wstrb;

@@ -427,7 +427,7 @@ assign r_v1 = tlb_v1[r_index];
 
 
 endmodule
-
+//将匹配index逻辑单独抽象成一个模块，因为传参无法传array所以只能以这么冗长的形式进行定义。
 module tlb_search_match
 #(
     parameter TLBNUM = 16
@@ -524,7 +524,9 @@ assign mtch[14] = (s_vppn[18:9] == tlb_vppn_14[18:9]) && (tlb_ps4MB_14 || s_vppn
 assign mtch[15] = (s_vppn[18:9] == tlb_vppn_15[18:9]) && (tlb_ps4MB_15 || s_vppn[8:0] == tlb_vppn_15[9:0]) && (s_asid == tlb_asid_15 || tlb_g_15);
 
 endmodule
-
+//空闲tlb分配算法，该算法只是一个简单的循环，甚至连先入先出都做不到因为它不会在invtlb时检查空闲tlb。
+//在exp19中可以对其进行改进
+//目前其实例化于cpu_core中
 module tlb_idx_alloc
 #(
     parameter TLBNUM = 16
