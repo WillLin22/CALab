@@ -65,16 +65,40 @@ module csr
     output wire [ 1:0]                  tlb_r_plv1,
     output wire [ 1:0]                  tlb_r_mat1,
     output wire                         tlb_r_d1,
-    output wire                         tlb_r_v1
+    output wire                         tlb_r_v1,
+    // --exp19
+    input  wire                         tlb_refill;  // tlb重填异常信号
+    output wire [ 1:0]                  crmd_plv,     
+    output wire                         crmd_da,      // 直接地址翻译模式的使能，高有效
+    output wire                         crmd_pg,      // 映射地址翻译模式的使能，高有效
+    output wire [ 1:0]                  crmd_datf,   // 直接地址翻译模式时，取指操作的存储访问类型
+    output wire [ 1:0]                  crmd_datm,   // 直接地址翻译模式时，load 和 store 操作的存储访问类型
+
+    //DMW 直接映射配置窗口 --exp19
+    output wire                         tlb_dmw0_plv0,
+    output wire                         tlb_dmw0_plv3,
+    output wire [ 1:0]                  tlb_dmw0_mat,  // 虚地址落在该映射窗口下访存操作的存储访问类型
+    output wire [ 2:0]                  tlb_dmw0_pseg, // 直接映射窗口的物理地址的[31:29]位
+    output wire [ 2:0]                  tlb_dmw0_vseg, // 直接映射窗口的虚地址的[31:29]位
+    output wire                         tlb_dmw1_plv0,
+    output wire                         tlb_dmw1_plv3,
+    output wire [ 1:0]                  tlb_dmw1_mat,
+    output wire [ 2:0]                  tlb_dmw1_pseg,
+    output wire [ 2:0]                  tlb_dmw1_vseg,
+
+    output wire [ 5:0]                  estat_ecode,
+
+    input wire                          exc_fs_tlb_refill // 发生在 IF 级的plv特权等级异常
+    input wire                          exc_fs_plv_invalid, // 发生在 IF 级的plv特权等级异常
 );
 
 /* ------------------ CRMD 当前模式信息 ------------------*/
-    reg  [ 1: 0] csr_crmd_plv;      //CRMD的PLV域，当前特权等级
-    reg          csr_crmd_ie;       //CRMD的全局中断使能信号
-    wire          csr_crmd_da;       //CRMD的直接地址翻译使能
-    wire          csr_crmd_pg;
-    wire  [ 6: 5] csr_crmd_datf;
-    wire  [ 8: 7] csr_crmd_datm;
+    reg [ 1: 0] csr_crmd_plv;      //CRMD的PLV域，当前特权等级
+    reg         csr_crmd_ie;       //CRMD的全局中断使能信号
+    reg         csr_crmd_da;       //CRMD的直接地址翻译使能
+    reg         csr_crmd_pg;
+    reg [ 6: 5] csr_crmd_datf;
+    reg [ 8: 7] csr_crmd_datm;
 
 always @(posedge clk) begin
     if (rst) begin
@@ -98,13 +122,39 @@ always @(posedge clk) begin
     end
 end
 
-
-// 目前处理器仅支持直接地址翻译模式，所以CRMD 的 DA、PG、DATF、DATM 域可以暂时置为常值。
+always @(posedge clk) begin
+    if (reset) begin
+        csr_crmd_da <= 1'b1;
+        csr_crmd_pg <= 1'b0;
+        csr_crmd_datf <= 2'b00;
+        csr_crmd_datm <= 2'b00;
+    end 
+    else if (csr_we && csr_num==`CSR_CRMD) begin
+        csr_crmd_da <= csr_wmask[`CSR_CRMD_DA] & csr_wvalue[`CSR_CRMD_DA]
+                       | ~csr_wmask[`CSR_CRMD_DA] & csr_crmd_da;
+        csr_crmd_pg <= csr_wmask[`CSR_CRMD_PG] & csr_wvalue[`CSR_CRMD_PG]
+                       | ~csr_wmask[`CSR_CRMD_PG] & csr_crmd_pg;
+        csr_crmd_datf <= csr_wmask[`CSR_CRMD_DATF] & csr_wvalue[`CSR_CRMD_DATF]
+                       | ~csr_wmask[`CSR_CRMD_DATF] & csr_crmd_datf;
+        csr_crmd_datm <= csr_wmask[`CSR_CRMD_DATM] & csr_wvalue[`CSR_CRMD_DATM]
+                       | ~csr_wmask[`CSR_CRMD_DATM] & csr_crmd_datm;
+    end
+    else if (tlb_refill) begin 
+        csr_crmd_da <= 1'b1; // 触发 TLB 重填例外时，将 da 设为1
+        csr_crmd_pg <= 1'b0; // 触发 TLB 重填例外时，将 pg 设为0
+    end
+    else if (ertn_flush && csr_estat_ecode == 6'h3f) begin 
+        csr_crmd_da <= 1'b0; //当执行 ERTN 指令从例外处理程序返回时，如果 CSR.ESTAT.Ecode=0x3F，则硬件将该域置为 0
+        csr_crmd_pg <= 1'b1; // 当执行 ERTN 指令从例外处理程序返回时，如果 CSR.ESTAT.Ecode=0x3F，则硬件将该域置为 1。
+    end
+end
+// 目前处理器仅支持直接地址翻译模式，所以CRMD 的 DA、PG、DATF、DATM 域可以暂时置为常值。 --exp19 需要完善！！
 //TODO: fix it
-assign csr_crmd_da = 1'b1;
-assign csr_crmd_pg = 1'b0;
-assign csr_crmd_datf = 2'b00;
-assign csr_crmd_datm = 2'b00;
+assign crmd_da = csr_crmd_da;
+assign crmd_pg = csr_crmd_pg;
+assign crmd_datf = csr_crmd_datf;
+assign crmd_datm = csr_crmd_datm;
+assign crmd_plv = csr_crmd_plv;
 
 /* ------------------ PRMD 例外前模式信息 ------------------*/
 reg  [ 1: 0] csr_prmd_pplv;     //CRMD的PLV域旧值
@@ -222,13 +272,14 @@ wire[31:0] csr_tlbidx_rvalue, csr_tlbehi_rvalue, csr_tlbelo0_rvalue, csr_tlbelo1
 
 //-- csr_badv
 
-wire wb_ex_addr_err = wb_ecode==`ECODE_ADE ||wb_ecode==`ECODE_ALE;
+wire wb_ex_addr_err = wb_ecode==`ECODE_ADE ||wb_ecode==`ECODE_ALE||(wb_ecode == `ECODE_TLBR) || (wb_ecode == `ECODE_PIL) || (wb_ecode == `ECODE_PIS) || (wb_ecode == `ECODE_PIF) || (wb_ecode == `ECODE_PME) || (wb_ecode == `ECODE_PPI);
 reg[31:0] csr_badv_vaddr;
 
 always @(posedge clk) begin
     if (wb_ex && wb_ex_addr_err) begin  
-        csr_badv_vaddr <= (wb_ecode==`ECODE_ADE &&
-        wb_esubcode==`ESUBCODE_ADEF) ? wb_pc : wb_vaddr;
+        csr_badv_vaddr <= ((wb_ecode==`ECODE_ADE && wb_esubcode==`ESUBCODE_ADEF) || (wb_ecode == `ECODE_PIF) ||
+                              (wb_ecode == `ECODE_PPI && exc_fs_plv_invalid) ||
+                              (wb_ecode == `ECODE_TLBR && exc_fs_tlb_refill)) ? wb_pc : wb_vaddr;
     end
 end
 
@@ -363,10 +414,21 @@ always @(posedge clk) begin
     end
 end
 assign csr_tlbidx_rvalue = {tlbidx_ne, 1'b0, tlbidx_ps, 20'b0, tlbidx_idx};
-// TLBEHI
+// TLBEHI(该寄存器包含 TLB 指令操作时与 TLB 表项高位部分虚页号相关的信息)
 // 31-13 vppn:srch/wr/fill的虚地址来源，rd写入
 // 异常处理：写入vaddr[31:13]至该寄存器：inst/load/store页无效，写允许3例外和特权等级不合规
+/* 例外种类
+PIL     load操作页无效例外
+PIS     store操作页无效例外
+PIF     取指操作页无效例外
+PME     页修改例外
+PPI     页特权等级不合规例外
+TLBR    TLB重填例外
+*/
 reg [18:0] tlbehi_vppn;
+wire ex_elbehi;
+assign ex_elbehi = (wb_ecode == `ECODE_PIL) || (wb_ecode == `ECODE_PIS) || (wb_ecode == `ECODE_PIF) || 
+                   (wb_ecode == `ECODE_PME) || (wb_ecode == `ECODE_PPI) || (wb_ecode == `ECODE_TLBR);
 assign tlb_r_vppn = tlbehi_vppn;
 always @(posedge clk) begin
     if(tlb_rd)begin
@@ -375,6 +437,9 @@ always @(posedge clk) begin
     else if(csr_we && csr_num == `CSR_TLBEHI)begin
         tlbehi_vppn <= csr_wmask[`TLBEHI_VPPN] & csr_wvalue[`TLBEHI_VPPN]
                       | ~csr_wmask[`TLBEHI_VPPN] & tlbehi_vppn;
+    end
+    else if (wb_ex &&ex_elbehi) begin
+        tlbehi_vppn <= ((wb_ecode == `ECODE_PIF) || (wb_ecode == `ECODE_PPI && exc_fs_plv_invalid) || (wb_ecode == `ECODE_TLBR && exc_fs_tlb_refill)) ? wb_pc[31:13] : wb_vaddr[31:13]; // 例外处理：页无效(PIL/PIS/PIF/PME/PPI/TLBR) ?
     end
 end
 assign csr_tlbehi_rvalue = {tlbehi_vppn, 13'b0};
@@ -489,5 +554,61 @@ assign csr_tlbrentry_rvalue = {tlbrentry_pa, 6'b0};
 //TODO: complete it considering port ertn_pc
 assign tlb_r_TLBR = csr_estat_ecode == 6'h3F;
 //复位：所有实现的CSR.DMW中的PLV0、PLV3均为0；
+
+// DMW0 直接映射配置窗口0 见讲义5.2.1节
+reg         dmw0_plv0, dmw0_plv3;
+reg [1:0]   dmw0_mat;
+reg [2:0]   dmw0_pseg;
+reg [2:0]   dmw0_vseg;
+
+always @(posedge clk) begin
+    if(rst) begin
+        dmw0_plv0 <= 1'b0;
+        dmw0_plv3 <= 1'b0;
+        dmw0_mat  <= 2'h0;
+        dmw0_pseg <= 3'h0;
+        dmw0_vseg <= 3'h0;
+    end
+    else if(csr_we && csr_num == `CSR_DMW0) begin
+        dmw0_plv0 <= csr_wmask[`DMW_PLV0] & csr_wvalue[`DMW_PLV0] | ~csr_wmask[`DMW_PLV0] & dmw0_plv0;
+        dmw0_plv3 <= csr_wmask[`DMW_PLV3] & csr_wvalue[`DMW_PLV3] | ~csr_wmask[`DMW_PLV3] & dmw0_plv3;
+        dmw0_mat  <= csr_wmask[`DMW_MAT]  & csr_wvalue[`DMW_MAT]  | ~csr_wmask[`DMW_MAT]  & dmw0_mat;
+        dmw0_pseg <= csr_wmask[`DMW_PSEG] & csr_wvalue[`DMW_PSEG] | ~csr_wmask[`DMW_PSEG] & dmw0_pseg;
+        dmw0_vseg <= csr_wmask[`DMW_VSEG] & csr_wvalue[`DMW_VSEG] | ~csr_wmask[`DMW_VSEG] & dmw0_vseg;
+    end
+end
+assign tlb_dmw0_plv0 = dmw0_plv0;
+assign tlb_dmw0_plv3 = dmw0_plv3;
+assign tlb_dmw0_mat  = dmw0_mat;
+assign tlb_dmw0_pseg = dmw0_pseg;
+assign tlb_dmw0_vseg = dmw0_vseg;
+
+// DMW1 直接映射配置窗口1 见讲义5.2.1节
+reg         dmw1_plv0, dmw1_plv3;
+reg [1:0]   dmw1_mat;
+reg [2:0]   dmw1_pseg;
+reg [2:0]   dmw1_vseg;
+
+always @(posedge clk) begin
+    if(rst) begin
+        dmw1_plv0 <= 1'b0;
+        dmw1_plv3 <= 1'b0;
+        dmw1_mat  <= 2'h0;
+        dmw1_pseg <= 3'h0;
+        dmw1_vseg <= 3'h0;
+    end
+    else if(csr_we && csr_num == `CSR_DMW1) begin
+        dmw1_plv0 <= csr_wmask[`DMW_PLV0] & csr_wvalue[`DMW_PLV0] | ~csr_wmask[`DMW_PLV0] & dmw1_plv0;
+        dmw1_plv3 <= csr_wmask[`DMW_PLV3] & csr_wvalue[`DMW_PLV3] | ~csr_wmask[`DMW_PLV3] & dmw1_plv3;
+        dmw1_mat  <= csr_wmask[`DMW_MAT]  & csr_wvalue[`DMW_MAT]  | ~csr_wmask[`DMW_MAT]  & dmw1_mat;
+        dmw1_pseg <= csr_wmask[`DMW_PSEG] & csr_wvalue[`DMW_PSEG] | ~csr_wmask[`DMW_PSEG] & dmw1_pseg;    
+        dmw1_vseg <= csr_wmask[`DMW_VSEG] & csr_wvalue[`DMW_VSEG] | ~csr_wmask[`DMW_VSEG] & dmw1_vseg;
+    end
+end
+assign tlb_dmw1_plv0 = dmw1_plv0;
+assign tlb_dmw1_plv3 = dmw1_plv3;
+assign tlb_dmw1_mat  = dmw1_mat;
+assign tlb_dmw1_pseg = dmw1_pseg;
+assign tlb_dmw1_vseg = dmw1_vseg;
 
 endmodule

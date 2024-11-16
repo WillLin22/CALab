@@ -123,3 +123,7 @@
 
 //TLBRENTRY
 `define TLBRENTRY_PA 31:6
+
+// DMW0-1
+`define CSR_DMW0 14'h180  // EXP19
+`define CSR_DMW1 14'h181  // EXP19
