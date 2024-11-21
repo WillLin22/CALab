@@ -362,11 +362,11 @@ reg [31:0] pc_ID;
 reg [31:0] instreg_IF;//取指阶段若dataok到来时未握手则暂存指令
 reg [31:0] inst_ID;//ID阶段的译码指令
 wire [31:0] mem_wdata_ID;
-reg [31:0] alu_src1_EX, alu_src2_EX, rj_value_EX,rj_value_MEM, rj_value_WB, rkd_value_EX,rkd_value_MEM, rkd_value_WB, mem_wdata_EX, pc_EX, br_target_EX;//exp18 update:增加了rj_value_MEM, rj_value_WB, rkd_value_MEM, rkd_value_WB
+reg [31:0] alu_src1_EX, alu_src2_EX, rj_value_EX,rj_value_MEM, rj_value_WB, rkd_value_EX,rkd_value_MEM, rkd_value_WB, mem_wdata_EX, pc_EX;//exp18 update:增加了rj_value_MEM, rj_value_WB, rkd_value_MEM, rkd_value_WB
 reg [14:0] alu_op_EX;
 reg [4:0] dest_EX;
 reg mem_we_EX;
-reg res_from_mem_EX, rf_we_EX, br_taken_EX;
+reg res_from_mem_EX, rf_we_EX;
 reg [31:0] result_all_MEM, pc_MEM;
 reg [4:0] dest_MEM;
 reg res_from_mem_MEM,rf_we_MEM;
@@ -1643,6 +1643,7 @@ assign tlb_in_srch_asid = csr_out_tlb_r_asid;
 
 tlb u_tlb(
     .clk            (clk),
+    .rst            (reset),
     //searchport0(for fetch)
     .s0_vppn        (tlb_in_s0_vppn),
     .s0_va_bit12    (tlb_in_s0_va_bit12),

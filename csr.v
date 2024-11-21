@@ -161,7 +161,11 @@ reg  [ 1: 0] csr_prmd_pplv;     //CRMD的PLV域旧值
 reg          csr_prmd_pie;      //CRMD的IE域旧值
 
 always @(posedge clk) begin
-    if (wb_ex) begin
+    if (rst) begin
+        csr_prmd_pplv <= 2'b0;
+        csr_prmd_pie <= 1'b0;
+    end
+    else if (wb_ex) begin
         csr_prmd_pplv <= csr_crmd_plv;
         csr_prmd_pie <= csr_crmd_ie;
     end
@@ -191,28 +195,32 @@ reg  [ 8: 0] csr_estat_esubcode;// 例外类型二级编码
 
 always @(posedge clk) begin
     if (rst)
-        csr_estat_is[1:0] <= 2'b0;
+        csr_estat_is[12:0] <= 12'b0;
     else if (csr_we && csr_num==`CSR_ESTAT)begin
         csr_estat_is[1:0] <= csr_wmask[`CSR_ESTAT_IS10] & csr_wvalue[`CSR_ESTAT_IS10]
                             | ~csr_wmask[`CSR_ESTAT_IS10] & csr_estat_is[1:0];
     end
     // csr_estat_is[9:2] <= hw_int_in[7:0]; //硬中断
-    csr_estat_is[9:2] <= 8'b0;
-    csr_estat_is[ 10] <= 1'b0;
+    // csr_estat_is[9:2] <= 8'b0;
+    // csr_estat_is[ 10] <= 1'b0;
 
     // csr_estat_is[ 11] <= 1'b0;
-    if (timer_cnt[31:0] == 32'b0) begin
+    else if (timer_cnt[31:0] == 32'b0) begin
         csr_estat_is[11] <= 1'b1;
     end
     else if (csr_we && csr_num == `CSR_TICLR && csr_wmask[`CSR_TICLR_CLR] && csr_wvalue[`CSR_TICLR_CLR]) 
         csr_estat_is[11] <= 1'b0;
 
     // csr_estat_is[ 12] <= ipi_int_in;
-    csr_estat_is[ 12] <= 1'b0;  // 核间中断
+    // csr_estat_is[ 12] <= 1'b0;  // 核间中断
 end
 
 always @(posedge clk) begin
-    if (wb_ex) begin
+    if (rst) begin
+        csr_estat_ecode <= 6'h0;
+        csr_estat_esubcode <= 9'b0;
+    end
+    else if (wb_ex) begin
         csr_estat_ecode <= wb_ecode;
         csr_estat_esubcode <= wb_esubcode;
     end
@@ -222,7 +230,9 @@ end
 reg [31:0] csr_era_pc; 
 
 always @(posedge clk) begin
-    if (wb_ex)
+    if (rst)
+        csr_era_pc <= 32'b0;
+    else if (wb_ex)
         csr_era_pc <= wb_pc;
     else if (csr_we && csr_num == `CSR_ERA)
         csr_era_pc <= csr_wmask[`CSR_ERA_PC] & csr_wvalue[`CSR_ERA_PC]
@@ -233,7 +243,9 @@ end
 reg  [25: 0] csr_eentry_va;     // 例外中断入口高位地址
 
 always @(posedge clk) begin
-    if (csr_we && csr_num == `CSR_EENTRY)
+    if (rst)
+        csr_eentry_va <= 26'b0;
+    else if (csr_we && csr_num == `CSR_EENTRY)
         csr_eentry_va <= csr_wmask[`CSR_EENTRY_VA] & csr_wvalue[`CSR_EENTRY_VA]
                         | ~csr_wmask[`CSR_EENTRY_VA] & csr_eentry_va;
 end
@@ -241,18 +253,26 @@ end
 reg  [31: 0] csr_save0_data, csr_save1_data, csr_save2_data, csr_save3_data;
 
 always @(posedge clk) begin
-    if (csr_we && csr_num==`CSR_SAVE0)
-        csr_save0_data <= csr_wmask[`CSR_SAVE_DATA] & csr_wvalue[`CSR_SAVE_DATA]
-                        | ~csr_wmask[`CSR_SAVE_DATA] & csr_save0_data;
-    if (csr_we && csr_num==`CSR_SAVE1)
-        csr_save1_data <= csr_wmask[`CSR_SAVE_DATA] & csr_wvalue[`CSR_SAVE_DATA]
-                        | ~csr_wmask[`CSR_SAVE_DATA] & csr_save1_data;
-    if (csr_we && csr_num==`CSR_SAVE2)
-        csr_save2_data <= csr_wmask[`CSR_SAVE_DATA] & csr_wvalue[`CSR_SAVE_DATA]
-                        | ~csr_wmask[`CSR_SAVE_DATA] & csr_save2_data;
-    if (csr_we && csr_num==`CSR_SAVE3)
-        csr_save3_data <= csr_wmask[`CSR_SAVE_DATA] & csr_wvalue[`CSR_SAVE_DATA]
-                        | ~csr_wmask[`CSR_SAVE_DATA] & csr_save3_data;
+    if (rst) begin
+        csr_save0_data <= 32'b0;
+        csr_save1_data <= 32'b0;
+        csr_save2_data <= 32'b0;
+        csr_save3_data <= 32'b0;
+    end
+    else begin
+        if (csr_we && csr_num==`CSR_SAVE0)
+            csr_save0_data <= csr_wmask[`CSR_SAVE_DATA] & csr_wvalue[`CSR_SAVE_DATA]
+                            | ~csr_wmask[`CSR_SAVE_DATA] & csr_save0_data;
+        if (csr_we && csr_num==`CSR_SAVE1)
+            csr_save1_data <= csr_wmask[`CSR_SAVE_DATA] & csr_wvalue[`CSR_SAVE_DATA]
+                            | ~csr_wmask[`CSR_SAVE_DATA] & csr_save1_data;
+        if (csr_we && csr_num==`CSR_SAVE2)
+            csr_save2_data <= csr_wmask[`CSR_SAVE_DATA] & csr_wvalue[`CSR_SAVE_DATA]
+                            | ~csr_wmask[`CSR_SAVE_DATA] & csr_save2_data;
+        if (csr_we && csr_num==`CSR_SAVE3)
+            csr_save3_data <= csr_wmask[`CSR_SAVE_DATA] & csr_wvalue[`CSR_SAVE_DATA]
+                            | ~csr_wmask[`CSR_SAVE_DATA] & csr_save3_data;
+    end
 end
 
 // wire [31:0] csr_crmd_rvalue = {28'b0, csr_crmd_da, csr_crmd_ie, csr_crmd_plv};
@@ -276,7 +296,9 @@ wire wb_ex_addr_err = wb_ecode==`ECODE_ADE ||wb_ecode==`ECODE_ALE||(wb_ecode == 
 reg[31:0] csr_badv_vaddr;
 
 always @(posedge clk) begin
-    if (wb_ex && wb_ex_addr_err) begin  
+    if (rst)
+        csr_badv_vaddr <= 32'b0;
+    else if (wb_ex && wb_ex_addr_err) begin  
         csr_badv_vaddr <= ((wb_ecode==`ECODE_ADE && wb_esubcode==`ESUBCODE_ADEF) || (wb_ecode == `ECODE_PIF) ||
                               (wb_ecode == `ECODE_PPI && exc_fs_plv_invalid) ||
                               (wb_ecode == `ECODE_TLBR && exc_fs_tlb_refill)) ? wb_pc : wb_vaddr;
@@ -304,8 +326,11 @@ reg csr_tcfg_en;
 reg csr_tcfg_periodic;
 reg[29:0] csr_tcfg_initval;
 always @(posedge clk) begin
-    if (rst)
+    if (rst) begin
         csr_tcfg_en <= 1'b0;
+        csr_tcfg_periodic <= 1'b0;
+        csr_tcfg_initval <= 30'b0;
+    end
     else if (csr_we && csr_num==`CSR_TCFG)
         csr_tcfg_en <= csr_wmask[`CSR_TCFG_EN]&csr_wvalue[`CSR_TCFG_EN] | ~csr_wmask[`CSR_TCFG_EN]&csr_tcfg_en;
     if (csr_we && csr_num==`CSR_TCFG) begin
@@ -396,7 +421,12 @@ assign tlb_r_idx = tlbidx_idx;
 assign tlb_r_ps = tlbidx_ps;
 assign tlb_r_e = (csr_estat_ecode == 6'h3F)? 1'b1 : ~tlbidx_ne;
 always @(posedge clk) begin
-    if(tlb_srch)begin
+    if(rst)begin
+        tlbidx_idx <= 4'b0;
+        tlbidx_ps <= 6'b0;
+        tlbidx_ne <= 1'b0;
+    end
+    else if(tlb_srch)begin
         tlbidx_idx <= tlb_w_idx;
         tlbidx_ne  <=~tlb_w_e;
     end
@@ -431,7 +461,9 @@ assign ex_elbehi = (wb_ecode == `ECODE_PIL) || (wb_ecode == `ECODE_PIS) || (wb_e
                    (wb_ecode == `ECODE_PME) || (wb_ecode == `ECODE_PPI) || (wb_ecode == `ECODE_TLBR);
 assign tlb_r_vppn = tlbehi_vppn;
 always @(posedge clk) begin
-    if(tlb_rd)begin
+    if(rst)
+        tlbehi_vppn <= 19'b0;
+    else if(tlb_rd)begin
         tlbehi_vppn <= tlb_w_vppn;
     end
     else if(csr_we && csr_num == `CSR_TLBEHI)begin
@@ -460,7 +492,15 @@ assign tlb_r_plv0 = tlbelo0_plv;
 assign tlb_r_mat0 = tlbelo0_mat;
 assign tlb_r_ppn0 = tlbelo0_ppn;
 always @(posedge clk) begin
-    if(tlb_rd)begin
+    if(rst) begin
+        tlbelo0_v <= 1'b0;
+        tlbelo0_d <= 1'b0;
+        tlbelo0_plv <= 2'b0;
+        tlbelo0_mat <= 2'b0;
+        tlbelo0_g <= 1'b0;
+        tlbelo0_ppn <= 20'b0;
+    end
+    else if(tlb_rd)begin
         tlbelo0_v <= tlb_w_v0;
         tlbelo0_d <= tlb_w_d0;
         tlbelo0_plv <= tlb_w_plv0;
@@ -494,7 +534,15 @@ assign tlb_r_mat1 = tlbelo1_mat;
 assign tlb_r_ppn1 = tlbelo1_ppn;
 assign tlb_r_g = tlbelo0_g & tlbelo1_g;
 always @(posedge clk) begin
-    if(tlb_rd)begin
+    if(rst) begin
+        tlbelo1_v <= 1'b0;
+        tlbelo1_d <= 1'b0;
+        tlbelo1_plv <= 2'b0;
+        tlbelo1_mat <= 2'b0;
+        tlbelo1_g <= 1'b0;
+        tlbelo1_ppn <= 20'b0;
+    end
+    else if(tlb_rd)begin
         tlbelo1_v <= tlb_w_v1;
         tlbelo1_d <= tlb_w_d1;
         tlbelo1_plv <= tlb_w_plv1;
@@ -530,7 +578,10 @@ always @(posedge clk) begin
         asid_asidbits <= 8'd10;
 end
 always @(posedge clk) begin
-    if(tlb_rd)begin
+    if(rst)begin
+        asid_asid <= 10'b0;
+    end
+    else if(tlb_rd)begin
         asid_asid <= tlb_w_asid;
     end
     else if(csr_we && csr_num == `CSR_ASID)begin
@@ -545,7 +596,10 @@ assign csr_asid_rvalue = {8'b0, asid_asidbits, 6'b0, asid_asid};
 // 31-6 PA TLB重填例外入口地址31-6位
 reg [25:0] tlbrentry_pa;
 always @(posedge clk) begin
-    if(csr_we && csr_num == `CSR_TLBRENTRY)begin
+    if(rst)begin
+        tlbrentry_pa <= 26'b0;
+    end
+    else if(csr_we && csr_num == `CSR_TLBRENTRY)begin
         tlbrentry_pa <= csr_wmask[`TLBRENTRY_PA] & csr_wvalue[`TLBRENTRY_PA]
                       | ~csr_wmask[`TLBRENTRY_PA] & tlbrentry_pa;
     end

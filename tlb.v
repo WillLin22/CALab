@@ -4,6 +4,7 @@ module tlb
 )
 (
     input  wire                         clk,
+    input  wire                         rst,
     //searchport 0(forfetch)
     input  wire [18:0]                  s0_vppn,
     input  wire                         s0_va_bit12,
@@ -337,7 +338,12 @@ tlb_search_match tlb_srch
 //invtlb
 integer i;
 always @(posedge clk) begin
-    if(invtlb_valid)begin
+    if(rst) begin
+        for(i=0;i<TLBNUM;i=i+1)begin
+            tlb_e[i] <= 1'b0;
+        end
+    end
+    else if(invtlb_valid)begin
         case(invtlb_op)
             5'b00000:begin
                 for(i=0;i<TLBNUM;i=i+1)begin
@@ -386,11 +392,30 @@ always @(posedge clk) begin
             end
         endcase
     end
+    else if(we)
+        tlb_e[w_index] <= w_e;
 end
 //write
 always @(posedge clk) begin
-    if(we)begin
-        tlb_e[w_index] <= w_e;
+    if (rst) begin
+         for(i=0;i<TLBNUM;i=i+1)begin
+            tlb_ps4MB[i] <= 1'b0;
+            tlb_vppn[i] <= 18'd0;
+            tlb_asid[i] <= 10'd0;
+            tlb_g[i] <= 1'b0;
+            tlb_ppn0[i] <= 18'd0;
+            tlb_plv0[i] <= 6'd0;
+            tlb_mat0[i] <= 6'd0;
+            tlb_d0[i] <= 1'b0;
+            tlb_v0[i] <= 1'b0;
+            tlb_ppn1[i] <= 18'd0;
+            tlb_plv1[i] <= 6'd0;
+            tlb_mat1[i] <= 6'd0;
+            tlb_d1[i] <= 1'b0;
+            tlb_v1[i] <= 1'b0;
+        end
+    end
+    else if(we)begin
         tlb_ps4MB[w_index] <= w_ps==6'd21;
         tlb_vppn[w_index] <= w_vppn;
         tlb_asid[w_index] <= w_asid;
