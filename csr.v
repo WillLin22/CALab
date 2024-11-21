@@ -255,8 +255,8 @@ always @(posedge clk) begin
                         | ~csr_wmask[`CSR_SAVE_DATA] & csr_save3_data;
 end
 
-wire [31:0] csr_crmd_rvalue = {28'b0, csr_crmd_da, csr_crmd_ie, csr_crmd_plv};
-// wire [31:0] csr_crmd_rvalue = {23'b0, csr_crmd_datm, csr_crmd_datf, csr_crmd_pg, csr_crmd_da, csr_crmd_ie, csr_crmd_plv};
+// wire [31:0] csr_crmd_rvalue = {28'b0, csr_crmd_da, csr_crmd_ie, csr_crmd_plv};
+wire [31:0] csr_crmd_rvalue = {23'b0, csr_crmd_datm, csr_crmd_datf, csr_crmd_pg, csr_crmd_da, csr_crmd_ie, csr_crmd_plv};
 wire [31:0] csr_prmd_rvalue = {29'b0, csr_prmd_pie, csr_prmd_pplv};
 wire [31:0] csr_ecfg_rvalue = {19'b0, csr_ecfg_lie};
 wire [31:0] csr_estat_rvalue = {1'b0, csr_estat_esubcode, csr_estat_ecode, 3'b0, csr_estat_is};
@@ -375,8 +375,8 @@ assign csr_rvalue = {32{csr_num==`CSR_CRMD}} & csr_crmd_rvalue
                     | {32{csr_num==`CSR_TLBRENTRY}} & csr_tlbrentry_rvalue;
 
 assign has_int = (|(csr_estat_is[11:0] & csr_ecfg_lie[11:0])) & csr_crmd_ie; // 送往ID级的中断有效信号 中断的使能情况分两个层次：低层次是与各中断一一对应的局部中断使能，通过 ECFG 控制寄存器的 LIE（Local Interrupt Enable）域的 11, 9..0 位来控制；高层次是全局中断使能，通过 CRMD 控制状态寄存器的 IE（Interrupt Enable）位来控制。
-assign ex_entry = csr_eentey_rvalue; // 送往pre-IF级的异常处理入口地址
-assign ertn_pc = csr_era_rvalue; // 送往pre-IF级的异常返回地址
+assign ex_entry = tlb_refill ? csr_tlbrentry_rvalue :csr_eentey_rvalue; // 送往pre-IF级的异常处理入口地址
+assign ertn_pc =  csr_era_rvalue; // 送往pre-IF级的异常返回地址
 
 wire tlb_srch = tlb_w_we & tlb_w_wop[0];
 wire tlb_rd = tlb_w_we & tlb_w_wop[1];

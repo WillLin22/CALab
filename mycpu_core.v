@@ -439,6 +439,8 @@ reg exc_fs_plv_invalid_ID, exc_fs_plv_invalid_EX, exc_fs_plv_invalid_MEM, exc_fs
 wire exc_es_plv_invalid_EX;
 reg exc_es_plv_invalid_MEM, exc_es_plv_invalid_WB;  // EX 级的页特权等级不合规例外
 wire to_csr_exc_fs_tlb_refill, to_csr_exc_fs_plv_invalid; // 送往 CSR 例外的信号，用于区分记录例外地址时是 pc（IF级） 还是 vaddr（EX级）
+wire [1:0] crmd_datm;
+wire [1:0] crmd_plv;
 
 //新的添加的通路声明放这里
 //--  inst decode for ID
@@ -608,23 +610,29 @@ assign dest          = dst_is_r1 ? 5'd1 :
 
 
 // EX exception --exp19
-assign exc_es_tlb_refill_EX = if_trans_tlb & (res_from_mem_EX | mem_we_EX) & ~tlb_out_s1_found; // 当访存操作的虚地址在 TLB 中查找没有匹配项时，触发该例外，通知系统软件进行 TLB 重填工作
-assign exc_es_load_invalid_EX = if_trans_tlb & res_from_mem_EX & ~tlb_out_s1_found; // load 操作的虚地址在 TLB 中找到了匹配项但是匹配页表项的 V=0，将触发该例外。
-assign exc_es_store_invalid_EX = if_trans_tlb & mem_we_EX & ~tlb_out_s1_found; // store 操作的虚地址在 TLB 中找到了匹配项但是匹配页表项的 V=0，将触发该例外。
-assign exc_es_plv_invalid_EX = if_trans_tlb & (res_from_mem_EX | mem_we_EX) & tlb_out_s1_found & tlb_out_s1_v & (crmd_plv > tlb_out_s1_plv); // load 操作的虚地址在 TLB 中找到了匹配项，且 V=1，但是特权等级不合规，将触发该例外。
-assign exc_es_modify_EX = if_trans_tlb & mem_we_EX & tlb_out_s1_found & tlb_out_s1_v & ~tlb_out_s1_d & (crmd_plv <= tlb_out_s1_plv); // store 操作的虚地址在 TLB 中找到了匹配，且 V=1，且特权等级合规的项，但是该页表项的 D 位为 0，将触发该例外。
+assign exc_es_tlb_refill_EX = ex_trans_tlb & (res_from_mem_EX | mem_we_EX) & ~tlb_out_s1_found; // 当访存操作的虚地址在 TLB 中查找没有匹配项时，触发该例外，通知系统软件进行 TLB 重填工作
+assign exc_es_load_invalid_EX = ex_trans_tlb & res_from_mem_EX & tlb_out_s1_found & ~tlb_out_s1_v; // load 操作的虚地址在 TLB 中找到了匹配项但是匹配页表项的 V=0，将触发该例外。
+assign exc_es_store_invalid_EX = ex_trans_tlb & mem_we_EX & tlb_out_s1_found & ~tlb_out_s1_v; // store 操作的虚地址在 TLB 中找到了匹配项但是匹配页表项的 V=0，将触发该例外。
+assign exc_es_plv_invalid_EX = ex_trans_tlb & (res_from_mem_EX | mem_we_EX) & tlb_out_s1_found & tlb_out_s1_v & (crmd_plv > tlb_out_s1_plv); // load 操作的虚地址在 TLB 中找到了匹配项，且 V=1，但是特权等级不合规，将触发该例外。
+assign exc_es_modify_EX = ex_trans_tlb & mem_we_EX & tlb_out_s1_found & tlb_out_s1_v & ~tlb_out_s1_d & (crmd_plv <= tlb_out_s1_plv); // store 操作的虚地址在 TLB 中找到了匹配，且 V=1，且特权等级合规的项，但是该页表项的 D 位为 0，将触发该例外。
 
 // EX 虚实地址转换 --exp19
 assign addr_ex_direct = alu_result;
+assign tlb_in_s1_vppn = alu_result[31:13];
+assign tlb_in_s1_va_bit12 = alu_result[12];
+assign tlb_in_s1_asid = csr_out_tlb_r_asid;
 assign addr_ex_dmw0 = {tlb_dmw0_pseg, alu_result[28:0]};
 assign addr_ex_dmw1 = {tlb_dmw1_pseg, alu_result[28:0]};
 assign addr_ex_tlb = {tlb_out_s1_ppn, alu_result[11:0]};
 
 assign ex_trans_direct = crmd_da & ~crmd_pg;
-assign ex_trans_dmw0 = ((crmd_plv == 0 && tlb_dmw0_plv0) || (crmd_plv == 3 && tlb_dmw0_plv3)) && (crmd_datm == tlb_dmw0_mat) && (alu_result[28:0] == tlb_dmw0_vseg);
-assign ex_trans_dmw1 = ((crmd_plv == 0 && tlb_dmw1_plv0) || (crmd_plv == 3 && tlb_dmw1_plv3)) && (crmd_datm == tlb_dmw1_mat) && (alu_result[28:0] == tlb_dmw1_vseg);
-assign ex_trans_tlb = ~crmd_da & crmd_pg;
-assign addr_ex_physical = ex_trans_direct ? addr_ex_direct : (ex_trans_dmw0 ? addr_ex_dmw0 : (ex_trans_dmw1 ? addr_ex_dmw1 : (ex_trans_tlb ? addr_ex_tlb : 32'b0)));
+assign ex_trans_dmw0 = ((crmd_plv == 0 && tlb_dmw0_plv0) || (crmd_plv == 3 && tlb_dmw0_plv3)) && (crmd_datm == tlb_dmw0_mat) && (alu_result[31:29] == tlb_dmw0_vseg);
+assign ex_trans_dmw1 = ((crmd_plv == 0 && tlb_dmw1_plv0) || (crmd_plv == 3 && tlb_dmw1_plv3)) && (crmd_datm == tlb_dmw1_mat) && (alu_result[31:29] == tlb_dmw1_vseg);
+assign ex_trans_tlb = ~crmd_da & crmd_pg & ~ex_trans_dmw0 & ~ex_trans_dmw1;
+assign addr_ex_physical = ex_trans_direct ? addr_ex_direct 
+                        : (ex_trans_dmw0 ? addr_ex_dmw0 
+                        : (ex_trans_dmw1 ? addr_ex_dmw1 
+                        : (ex_trans_tlb ? addr_ex_tlb : 32'b0)));
 
 assign  mem_wdata_ID = rkd_value;
 
@@ -706,7 +714,13 @@ assign seq_pc       = pc + 3'h4;
 assign inst_sram_wr = 1'b0;
 assign nextpc = not_accepted &~flush_all ? nextpc_reg : (exception_WB&&flush_all ? ex_entry : (ertn_flush_WB? ertn_pc : (br_taken & effectful_ID? br_target : seq_pc)));
 // --exp19
+
+
+
 assign nextpc_direct = nextpc;
+assign tlb_in_s0_vppn = nextpc[31:13];
+assign tlb_in_s0_va_bit12 = nextpc[12];
+assign tlb_in_s0_asid = csr_out_tlb_r_asid;
 assign nextpc_dmw0 = {tlb_dmw0_pseg, nextpc[28:0]};
 assign nextpc_dmw1 = {tlb_dmw1_pseg, nextpc[28:0]};
 assign nextpc_tlb = {tlb_out_s0_ppn, nextpc[11:0]};
@@ -714,24 +728,27 @@ assign nextpc_tlb = {tlb_out_s0_ppn, nextpc[11:0]};
 assign if_trans_direct = crmd_da & ~crmd_pg;
 assign if_trans_dmw0 = ((crmd_plv == 0 && tlb_dmw0_plv0) || (crmd_plv == 3 && tlb_dmw0_plv3)) && (nextpc[31:29] == tlb_dmw0_vseg); // 虚地址的最高 3 位（[31:29]位）与配置窗口寄存器中的[31:29]相等，且当前特权等级在该配置窗口中被允许。 讲义5.2.1节
 assign if_trans_dmw1 = ((crmd_plv == 0 && tlb_dmw1_plv0) || (crmd_plv == 3 && tlb_dmw1_plv3)) && (nextpc[31:29] == tlb_dmw1_vseg); // 虚地址的最高 3 位（[31:29]位）与配置窗口寄存器中的[31:29]相等，且当前特权等级在该配置窗口中被允许。 讲义5.2.1节
-assign if_trans_tlb = ~crmd_da & crmd_pg;
+assign if_trans_tlb = ~crmd_da & crmd_pg & ~if_trans_dmw0 & ~if_trans_dmw1;
 assign nextpc_physical = if_trans_direct ? nextpc_direct : (if_trans_dmw0 ? nextpc_dmw0 : (if_trans_dmw1 ? nextpc_dmw1 : (if_trans_tlb ? nextpc_tlb : 32'b0)));
 
-assign inst_sram_req = ~IF_ADEF & req_inst;
+assign inst_sram_req = ~ex_IF & req_inst;
 assign inst_sram_we = |inst_sram_wstrb;
 assign inst_sram_size = 2'b10;
 assign inst_sram_wstrb = 4'b0;
-assign inst_sram_addr = pc;
+assign inst_sram_addr = nextpc_physical_reg;
 assign inst_sram_wdata = 32'b0;
 assign addr_ok_inst = inst_sram_addr_ok;
 assign data_ok_inst = inst_sram_data_ok;
 
+reg [32:0] nextpc_physical_reg;
 always @(posedge clk) begin
     if (reset) begin
         pc <= 32'h1bfffffc;     //trick: to make nextpc be 0x1c000000 during reset 
+        nextpc_physical_reg <= 32'h1bfffffc;
     end
     else if(allow_in_IF) begin
         pc <= nextpc;
+        nextpc_physical_reg <= nextpc_physical;
     end
 end
 
@@ -764,9 +781,10 @@ always @(posedge clk) begin
         exc_fs_tlb_refill_ID <= exc_fs_tlb_refill_IF;
         exc_fs_plv_invalid_ID <= exc_fs_plv_invalid_IF;
         exc_fs_fetch_invalid_ID <= exc_fs_fetch_invalid_IF;
-        flush_all_ID <= IF_ADEF&&~flush_all;//!flush_all时需要清空所有的flush_all信号
+        flush_all_ID <= ex_IF&&~flush_all;//!flush_all时需要清空所有的flush_all信号
     end
 end
+wire ex_IF = IF_ADEF || exc_fs_tlb_refill_IF || exc_fs_plv_invalid_IF || exc_fs_fetch_invalid_IF;
 
 always @(posedge clk) begin
     if(reset)
@@ -1118,7 +1136,7 @@ always @(posedge clk) begin
         ertn_flush_MEM <= ertn_flush_EX;
         csr_wvalue_MEM <= rkd_value_EX;
 
-        flush_all_MEM <= (flush_all_EX|ALE_EX)&~flush_all;
+        flush_all_MEM <= (flush_all_EX|ex_EX)&~flush_all;
         vaddr_MEM <= alu_result;
 
         exc_syscall_MEM <= exc_syscall_EX;
@@ -1144,7 +1162,8 @@ always @(posedge clk) begin
     else if(ertn_flush_WB)
         ertn_flush_MEM <= 1'b0;
 end
-
+wire ex_EX;
+assign ex_EX = ALE_EX | exc_es_load_invalid_EX | exc_es_store_invalid_EX | exc_es_modify_EX | exc_es_plv_invalid_EX | exc_es_tlb_refill_EX;
 
 assign result_forward[0] = alu_result;
 //!计算的结果是内存地址，不要前递
@@ -1170,7 +1189,7 @@ end
 wire ALE_EX;
 wire mem_en = (mem_we_EX || res_from_mem_EX) &&~reset && effectful_EX //实际上要有EX的寄存器发请求，MEM才能接受 
             && ~found_flush_all_EX;//正在刷新流水线时不发请求
-assign data_sram_en_EX    = mem_en &~ALE_EX;
+assign data_sram_en_EX    = mem_en &~ex_EX;
                         
 assign data_sram_we_EX    = mem_we_EX? {mem_word_EX|(mem_half_EX&mem_offset[1])|(mem_byte_EX&mem_offset[1]&mem_offset[0])
                                     ,mem_word_EX|(mem_half_EX&mem_offset[1])|(mem_byte_EX&mem_offset[1]&~mem_offset[0])
@@ -1465,7 +1484,7 @@ csr u_csr(
     .tlb_r_d1           (csr_out_tlb_r_d1),
     .tlb_r_v1           (csr_out_tlb_r_v1),
     
-    .tlb_refill         (ex_tlb_refill),
+    .tlb_refill         (exc_es_tlb_refill_WB),
 
     .crmd_plv           (crmd_plv),
     .crmd_da            (crmd_da),
@@ -1502,7 +1521,7 @@ always @(posedge clk) begin
         state_IF <= 3'b001;
     else if((state_IF[2] | state_IF[0]) & handshake_IF_ID)
         state_IF <= 3'b010;
-    else if(state_IF[2] & data_ok_inst | state_IF[1] & IF_ADEF)
+    else if(state_IF[2] & data_ok_inst | state_IF[1] & ex_IF)
         state_IF <= 3'b001;
     else if(state_IF[1] & addr_ok_inst)
         state_IF <= 3'b100;
@@ -1582,12 +1601,11 @@ assign data_ok_mem = data_sram_data_ok;
 assign allow_in_WB = 1'b1;
 assign ready_go_WB = 1'b1;
 
-assign effectful_IF = valid_IF & ~IF_ADEF & ~flush_all;
+assign effectful_IF = valid_IF & ~ex_IF & ~flush_all;
 assign effectful_ID = valid_ID & ~ex_ID & ~flush_all & ~flush_all_ID &~WAR;//写后读阻塞中显然是无效的。
 assign effectful_EX = valid_EX & ~flush_all & ~flush_all_EX;
 assign effectful_MEM = valid_MEM & ~flush_all & ~flush_all_MEM;
 assign effectful_WB = valid_WB & ~flush_all & ~flush_all_WB;
-
 //exp18
 assign tlb_in_invtlb_valid = invtlb_WB & effectful_WB;
 assign tlb_in_invtlb_op = dest_WB;
