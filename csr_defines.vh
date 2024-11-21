@@ -127,3 +127,11 @@
 // DMW0-1
 `define CSR_DMW0 14'h180  // EXP19
 `define CSR_DMW1 14'h181  // EXP19
+
+`define DMW_PLV0 0
+`define DMW_PLV1 1
+`define DMW_PLV2 2
+`define DMW_PLV3 3
+`define DMW_MAT 5:4
+`define DMW_PSEG 27:25
+`define DMW_VSEG 31:29

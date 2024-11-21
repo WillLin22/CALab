@@ -67,7 +67,7 @@ module csr
     output wire                         tlb_r_d1,
     output wire                         tlb_r_v1,
     // --exp19
-    input  wire                         tlb_refill;  // tlb重填异常信号
+    input  wire                         tlb_refill,  // tlb重填异常信号
     output wire [ 1:0]                  crmd_plv,     
     output wire                         crmd_da,      // 直接地址翻译模式的使能，高有效
     output wire                         crmd_pg,      // 映射地址翻译模式的使能，高有效
@@ -88,8 +88,8 @@ module csr
 
     output wire [ 5:0]                  estat_ecode,
 
-    input wire                          exc_fs_tlb_refill // 发生在 IF 级的plv特权等级异常
-    input wire                          exc_fs_plv_invalid, // 发生在 IF 级的plv特权等级异常
+    input wire                          exc_fs_tlb_refill, // 发生在 IF 级的plv特权等级异常
+    input wire                          exc_fs_plv_invalid // 发生在 IF 级的plv特权等级异常
 );
 
 /* ------------------ CRMD 当前模式信息 ------------------*/
@@ -123,7 +123,7 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    if (reset) begin
+    if (rst) begin
         csr_crmd_da <= 1'b1;
         csr_crmd_pg <= 1'b0;
         csr_crmd_datf <= 2'b00;

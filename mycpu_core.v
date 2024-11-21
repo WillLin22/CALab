@@ -421,14 +421,23 @@ reg we_EX, we_MEM, we_WB;
 reg [3:0] wop_EX, wop_MEM, wop_WB;
 
 //exp19
-wire exc_fs_tlb_refill_IF, exc_fs_tlb_refill_ID, exc_fs_tlb_refill_EX, exc_fs_tlb_refill_MEM, exc_fs_tlb_refill_WB;  // IF 级的 TLB 重填例外
-wire exc_es_tlb_refill_EX, exc_es_tlb_refill_MEM, exc_es_tlb_refill_WB;  // EX 级的 TLB 重填例外
-wire exc_es_load_invalid_EX, exc_es_load_invalid_MEM, exc_es_load_invalid_WB;  // EX 级的load操作页无效例外
-wire exc_es_store_invalid_EX, exc_es_store_invalid_MEM, exc_es_store_invalid_WB;  // EX 级的 store操作页无效例外
-wire exc_fs_fetch_invalid_IF, exc_fs_fetch_invalid_ID, exc_fs_fetch_invalid_EX, exc_fs_fetch_invalid_MEM, exc_fs_fetch_invalid_WB;  // IF 级的取指操作页无效例外
-wire exc_es_modify_EX, exc_es_modify_MEM, exc_es_modify_WB;  // EX 级的页修改例外
-wire exc_fs_plv_invalid_IF, exc_fs_plv_invalid_ID, exc_fs_plv_invalid_EX, exc_fs_plv_invalid_MEM, exc_fs_plv_invalid_WB;  // IF 级的页特权等级不合规例外
-wire exc_es_plv_invalid_EX, exc_es_plv_invalid_MEM, exc_es_plv_invalid_WB;  // EX 级的页特权等级不合规例外
+wire exc_fs_tlb_refill_IF;
+reg exc_fs_tlb_refill_ID, exc_fs_tlb_refill_EX, exc_fs_tlb_refill_MEM, exc_fs_tlb_refill_WB;  // IF 级的 TLB 重填例外
+wire exc_es_tlb_refill_EX;
+reg exc_es_tlb_refill_MEM, exc_es_tlb_refill_WB;  // EX 级的 TLB 重填例外
+
+wire exc_es_load_invalid_EX;
+reg exc_es_load_invalid_MEM, exc_es_load_invalid_WB;  // EX 级的load操作页无效例外
+wire exc_es_store_invalid_EX;
+reg exc_es_store_invalid_MEM, exc_es_store_invalid_WB;  // EX 级的 store操作页无效例外
+wire exc_fs_fetch_invalid_IF;
+reg exc_fs_fetch_invalid_ID, exc_fs_fetch_invalid_EX, exc_fs_fetch_invalid_MEM, exc_fs_fetch_invalid_WB;  // IF 级的取指操作页无效例外
+wire exc_es_modify_EX;
+reg exc_es_modify_MEM, exc_es_modify_WB;  // EX 级的页修改例外
+wire exc_fs_plv_invalid_IF;
+reg exc_fs_plv_invalid_ID, exc_fs_plv_invalid_EX, exc_fs_plv_invalid_MEM, exc_fs_plv_invalid_WB;  // IF 级的页特权等级不合规例外
+wire exc_es_plv_invalid_EX;
+reg exc_es_plv_invalid_MEM, exc_es_plv_invalid_WB;  // EX 级的页特权等级不合规例外
 wire to_csr_exc_fs_tlb_refill, to_csr_exc_fs_plv_invalid; // 送往 CSR 例外的信号，用于区分记录例外地址时是 pc（IF级） 还是 vaddr（EX级）
 
 //新的添加的通路声明放这里
