@@ -106,6 +106,22 @@ tlb_search_match s0
 (
     .s_vppn(s0_vppn),
     .s_asid(s0_asid),
+    .tlb_e_0(tlb_e[0]),
+    .tlb_e_1(tlb_e[1]),
+    .tlb_e_2(tlb_e[2]),
+    .tlb_e_3(tlb_e[3]),
+    .tlb_e_4(tlb_e[4]),
+    .tlb_e_5(tlb_e[5]),
+    .tlb_e_6(tlb_e[6]),
+    .tlb_e_7(tlb_e[7]),
+    .tlb_e_8(tlb_e[8]),
+    .tlb_e_9(tlb_e[9]),
+    .tlb_e_10(tlb_e[10]),
+    .tlb_e_11(tlb_e[11]),
+    .tlb_e_12(tlb_e[12]),
+    .tlb_e_13(tlb_e[13]),
+    .tlb_e_14(tlb_e[14]),
+    .tlb_e_15(tlb_e[15]),
     .tlb_vppn_0(tlb_vppn[0]),
     .tlb_vppn_1(tlb_vppn[1]),
     .tlb_vppn_2(tlb_vppn[2]),
@@ -178,6 +194,22 @@ tlb_search_match s1
 (
     .s_vppn(s1_vppn),
     .s_asid(s1_asid),
+    .tlb_e_0(tlb_e[0]),
+    .tlb_e_1(tlb_e[1]),
+    .tlb_e_2(tlb_e[2]),
+    .tlb_e_3(tlb_e[3]),
+    .tlb_e_4(tlb_e[4]),
+    .tlb_e_5(tlb_e[5]),
+    .tlb_e_6(tlb_e[6]),
+    .tlb_e_7(tlb_e[7]),
+    .tlb_e_8(tlb_e[8]),
+    .tlb_e_9(tlb_e[9]),
+    .tlb_e_10(tlb_e[10]),
+    .tlb_e_11(tlb_e[11]),
+    .tlb_e_12(tlb_e[12]),
+    .tlb_e_13(tlb_e[13]),
+    .tlb_e_14(tlb_e[14]),
+    .tlb_e_15(tlb_e[15]),
     .tlb_vppn_0(tlb_vppn[0]),
     .tlb_vppn_1(tlb_vppn[1]),
     .tlb_vppn_2(tlb_vppn[2]),
@@ -269,6 +301,22 @@ tlb_search_match tlb_srch
 (
     .s_vppn(tlbsrch_vppn),
     .s_asid(tlbsrch_asid),
+    .tlb_e_0(tlb_e[0]),
+    .tlb_e_1(tlb_e[1]),
+    .tlb_e_2(tlb_e[2]),
+    .tlb_e_3(tlb_e[3]),
+    .tlb_e_4(tlb_e[4]),
+    .tlb_e_5(tlb_e[5]),
+    .tlb_e_6(tlb_e[6]),
+    .tlb_e_7(tlb_e[7]),
+    .tlb_e_8(tlb_e[8]),
+    .tlb_e_9(tlb_e[9]),
+    .tlb_e_10(tlb_e[10]),
+    .tlb_e_11(tlb_e[11]),
+    .tlb_e_12(tlb_e[12]),
+    .tlb_e_13(tlb_e[13]),
+    .tlb_e_14(tlb_e[14]),
+    .tlb_e_15(tlb_e[15]),
     .tlb_vppn_0(tlb_vppn[0]),
     .tlb_vppn_1(tlb_vppn[1]),
     .tlb_vppn_2(tlb_vppn[2]),
@@ -463,6 +511,22 @@ module tlb_search_match
 (
     input  wire [18:0] s_vppn,
     input  wire [ 9:0] s_asid,
+    input  wire tlb_e_0,
+    input  wire tlb_e_1,
+    input  wire tlb_e_2,
+    input  wire tlb_e_3,
+    input  wire tlb_e_4,
+    input  wire tlb_e_5,
+    input  wire tlb_e_6,
+    input  wire tlb_e_7,
+    input  wire tlb_e_8,
+    input  wire tlb_e_9,
+    input  wire tlb_e_10,
+    input  wire tlb_e_11,
+    input  wire tlb_e_12,
+    input  wire tlb_e_13,
+    input  wire tlb_e_14,
+    input  wire tlb_e_15,
     input  wire [18:0] tlb_vppn_0,
     input  wire [18:0] tlb_vppn_1,
     input  wire [18:0] tlb_vppn_2,
@@ -534,22 +598,22 @@ module tlb_search_match
 assign match = |mtch;
 encoder_16_4 e(.in(mtch), .out(index));
 
-assign mtch[0] = (s_vppn[18:9] == tlb_vppn_0[18:9]) && (tlb_ps4MB_0 || s_vppn[8:0] == tlb_vppn_0[8:0]) && (s_asid == tlb_asid_0 || tlb_g_0);
-assign mtch[1] = (s_vppn[18:9] == tlb_vppn_1[18:9]) && (tlb_ps4MB_1 || s_vppn[8:0] == tlb_vppn_1[8:0]) && (s_asid == tlb_asid_1 || tlb_g_1);
-assign mtch[2] = (s_vppn[18:9] == tlb_vppn_2[18:9]) && (tlb_ps4MB_2 || s_vppn[8:0] == tlb_vppn_2[8:0]) && (s_asid == tlb_asid_2 || tlb_g_2);
-assign mtch[3] = (s_vppn[18:9] == tlb_vppn_3[18:9]) && (tlb_ps4MB_3 || s_vppn[8:0] == tlb_vppn_3[8:0]) && (s_asid == tlb_asid_3 || tlb_g_3);
-assign mtch[4] = (s_vppn[18:9] == tlb_vppn_4[18:9]) && (tlb_ps4MB_4 || s_vppn[8:0] == tlb_vppn_4[8:0]) && (s_asid == tlb_asid_4 || tlb_g_4);
-assign mtch[5] = (s_vppn[18:9] == tlb_vppn_5[18:9]) && (tlb_ps4MB_5 || s_vppn[8:0] == tlb_vppn_5[8:0]) && (s_asid == tlb_asid_5 || tlb_g_5);
-assign mtch[6] = (s_vppn[18:9] == tlb_vppn_6[18:9]) && (tlb_ps4MB_6 || s_vppn[8:0] == tlb_vppn_6[8:0]) && (s_asid == tlb_asid_6 || tlb_g_6);
-assign mtch[7] = (s_vppn[18:9] == tlb_vppn_7[18:9]) && (tlb_ps4MB_7 || s_vppn[8:0] == tlb_vppn_7[8:0]) && (s_asid == tlb_asid_7 || tlb_g_7);
-assign mtch[8] = (s_vppn[18:9] == tlb_vppn_8[18:9]) && (tlb_ps4MB_8 || s_vppn[8:0] == tlb_vppn_8[8:0]) && (s_asid == tlb_asid_8 || tlb_g_8);
-assign mtch[9] = (s_vppn[18:9] == tlb_vppn_9[18:9]) && (tlb_ps4MB_9 || s_vppn[8:0] == tlb_vppn_9[8:0]) && (s_asid == tlb_asid_9 || tlb_g_9);
-assign mtch[10] = (s_vppn[18:9] == tlb_vppn_10[18:9]) && (tlb_ps4MB_10 || s_vppn[8:0] == tlb_vppn_10[8:0]) && (s_asid == tlb_asid_10 || tlb_g_10);
-assign mtch[11] = (s_vppn[18:9] == tlb_vppn_11[18:9]) && (tlb_ps4MB_11 || s_vppn[8:0] == tlb_vppn_11[8:0]) && (s_asid == tlb_asid_11 || tlb_g_11);
-assign mtch[12] = (s_vppn[18:9] == tlb_vppn_12[18:9]) && (tlb_ps4MB_12 || s_vppn[8:0] == tlb_vppn_12[8:0]) && (s_asid == tlb_asid_12 || tlb_g_12);
-assign mtch[13] = (s_vppn[18:9] == tlb_vppn_13[18:9]) && (tlb_ps4MB_13 || s_vppn[8:0] == tlb_vppn_13[8:0]) && (s_asid == tlb_asid_13 || tlb_g_13);
-assign mtch[14] = (s_vppn[18:9] == tlb_vppn_14[18:9]) && (tlb_ps4MB_14 || s_vppn[8:0] == tlb_vppn_14[8:0]) && (s_asid == tlb_asid_14 || tlb_g_14);
-assign mtch[15] = (s_vppn[18:9] == tlb_vppn_15[18:9]) && (tlb_ps4MB_15 || s_vppn[8:0] == tlb_vppn_15[8:0]) && (s_asid == tlb_asid_15 || tlb_g_15);
+assign mtch[0] = (s_vppn[18:9] == tlb_vppn_0[18:9]) && (tlb_ps4MB_0 || s_vppn[8:0] == tlb_vppn_0[8:0]) && (s_asid == tlb_asid_0 || tlb_g_0) && tlb_e_0;
+assign mtch[1] = (s_vppn[18:9] == tlb_vppn_1[18:9]) && (tlb_ps4MB_1 || s_vppn[8:0] == tlb_vppn_1[8:0]) && (s_asid == tlb_asid_1 || tlb_g_1) && tlb_e_1;
+assign mtch[2] = (s_vppn[18:9] == tlb_vppn_2[18:9]) && (tlb_ps4MB_2 || s_vppn[8:0] == tlb_vppn_2[8:0]) && (s_asid == tlb_asid_2 || tlb_g_2) && tlb_e_2;
+assign mtch[3] = (s_vppn[18:9] == tlb_vppn_3[18:9]) && (tlb_ps4MB_3 || s_vppn[8:0] == tlb_vppn_3[8:0]) && (s_asid == tlb_asid_3 || tlb_g_3) && tlb_e_3;
+assign mtch[4] = (s_vppn[18:9] == tlb_vppn_4[18:9]) && (tlb_ps4MB_4 || s_vppn[8:0] == tlb_vppn_4[8:0]) && (s_asid == tlb_asid_4 || tlb_g_4) && tlb_e_4;
+assign mtch[5] = (s_vppn[18:9] == tlb_vppn_5[18:9]) && (tlb_ps4MB_5 || s_vppn[8:0] == tlb_vppn_5[8:0]) && (s_asid == tlb_asid_5 || tlb_g_5) && tlb_e_5;
+assign mtch[6] = (s_vppn[18:9] == tlb_vppn_6[18:9]) && (tlb_ps4MB_6 || s_vppn[8:0] == tlb_vppn_6[8:0]) && (s_asid == tlb_asid_6 || tlb_g_6) && tlb_e_6;
+assign mtch[7] = (s_vppn[18:9] == tlb_vppn_7[18:9]) && (tlb_ps4MB_7 || s_vppn[8:0] == tlb_vppn_7[8:0]) && (s_asid == tlb_asid_7 || tlb_g_7) && tlb_e_7;
+assign mtch[8] = (s_vppn[18:9] == tlb_vppn_8[18:9]) && (tlb_ps4MB_8 || s_vppn[8:0] == tlb_vppn_8[8:0]) && (s_asid == tlb_asid_8 || tlb_g_8) && tlb_e_8;
+assign mtch[9] = (s_vppn[18:9] == tlb_vppn_9[18:9]) && (tlb_ps4MB_9 || s_vppn[8:0] == tlb_vppn_9[8:0]) && (s_asid == tlb_asid_9 || tlb_g_9) && tlb_e_9;
+assign mtch[10] = (s_vppn[18:9] == tlb_vppn_10[18:9]) && (tlb_ps4MB_10 || s_vppn[8:0] == tlb_vppn_10[8:0]) && (s_asid == tlb_asid_10 || tlb_g_10) && tlb_e_10;
+assign mtch[11] = (s_vppn[18:9] == tlb_vppn_11[18:9]) && (tlb_ps4MB_11 || s_vppn[8:0] == tlb_vppn_11[8:0]) && (s_asid == tlb_asid_11 || tlb_g_11) && tlb_e_11;
+assign mtch[12] = (s_vppn[18:9] == tlb_vppn_12[18:9]) && (tlb_ps4MB_12 || s_vppn[8:0] == tlb_vppn_12[8:0]) && (s_asid == tlb_asid_12 || tlb_g_12) && tlb_e_12;
+assign mtch[13] = (s_vppn[18:9] == tlb_vppn_13[18:9]) && (tlb_ps4MB_13 || s_vppn[8:0] == tlb_vppn_13[8:0]) && (s_asid == tlb_asid_13 || tlb_g_13) && tlb_e_13;
+assign mtch[14] = (s_vppn[18:9] == tlb_vppn_14[18:9]) && (tlb_ps4MB_14 || s_vppn[8:0] == tlb_vppn_14[8:0]) && (s_asid == tlb_asid_14 || tlb_g_14) && tlb_e_14;
+assign mtch[15] = (s_vppn[18:9] == tlb_vppn_15[18:9]) && (tlb_ps4MB_15 || s_vppn[8:0] == tlb_vppn_15[8:0]) && (s_asid == tlb_asid_15 || tlb_g_15) && tlb_e_15;
 
 endmodule
 //空闲tlb分配算法，该算法只是一个简单的循环，甚至连先入先出都做不到因为它不会在invtlb时检查空闲tlb。
