@@ -100,6 +100,7 @@ module csr
     reg [ 6: 5] csr_crmd_datf;
     reg [ 8: 7] csr_crmd_datm;
 
+assign estat_ecode = 6'b0;
 always @(posedge clk) begin
     if (rst) begin
         csr_crmd_plv <= 2'b0;  // 复位时需要将 CRMD 的 PLV 域置为全 0 （最高优先级）

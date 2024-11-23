@@ -48,14 +48,13 @@ always @(posedge clk) begin
 end
 
 wire [31:0] seq_pc;
-wire [31:0] nextpc;
+reg [31:0] nextpc;
 wire        br_taken;
 wire [31:0] br_target;
 wire [31:0] inst = inst_sram_rdata;
 reg  [31:0] pc;
 
 wire [14:0] alu_op;
-wire        load_op;
 wire        src1_is_pc;
 wire        src2_is_imm;
 wire        res_from_mem;
@@ -445,11 +444,10 @@ wire [1:0] crmd_plv;
 // tlb_crush_related --exp18&19
 wire tlb_reflush;
 wire [31:0] tlb_reflush_pc;
-wire tlb_refetch_ID;
 reg tlb_refetch_EX, tlb_refetch_MEM, tlb_refetch_WB;
 wire tlb_refetch_tlb_inst_ID, tlb_refetch_csr_inst_ID;
-wire inst_tlbrd_EX, inst_tlbrd_MEM, inst_tlbrd_WB;
 
+// reg tlb_refetch_pc_EX, tlb_refetch_pc_MEM, tlb_refetch_pc_WB;
 
 //新的添加的通路声明放这里
 //--  inst decode for ID
@@ -725,7 +723,22 @@ always @(posedge clk) begin
 end
 assign seq_pc       = pc + 3'h4;
 assign inst_sram_wr = 1'b0;
-assign nextpc = not_accepted &~flush_all ? nextpc_reg : (exception_WB&&flush_all ? ex_entry : (ertn_flush_WB ? ertn_pc : (tlb_reflush ? tlb_reflush_pc : (br_taken & effectful_ID ? br_target : seq_pc))));
+// assign nextpc = not_accepted &~flush_all ? nextpc_reg : (exception_WB&&flush_all ? ex_entry : (ertn_flush_WB ? ertn_pc : (tlb_reflush ? tlb_reflush_pc : (br_taken & effectful_ID ? br_target : seq_pc))));
+
+always @(*) begin
+    if (not_accepted & ~flush_all)
+        nextpc = nextpc_reg;
+    else if (exception_WB && flush_all)
+        nextpc = ex_entry;
+    else if (ertn_flush_WB)
+        nextpc = ertn_pc;
+    else if (tlb_reflush)
+        nextpc = tlb_reflush_pc;
+    else if (br_taken && effectful_ID)
+        nextpc = br_target;
+    else
+        nextpc = seq_pc;
+end
 // --exp19
 
 
@@ -777,16 +790,17 @@ always @(posedge clk) begin
     else if(data_ok_inst)
         instreg_IF <= inst_sram_rdata;
 end
-wire IF_ADEF = |nextpc_physical[1:0];//取指错误：pc非对齐
+wire IF_ADEF = |nextpc[1:0];//取指错误：pc非对齐
 
 always @(posedge clk) begin
-    if (reset || tlb_reflush) begin
+    if (reset) begin
         pc_ID <= 32'h0;
         exc_adef_ID <= 1'b0;
         exc_fs_tlb_refill_ID <= 1'b0;
         exc_fs_plv_invalid_ID <= 1'b0;
         exc_fs_fetch_invalid_ID <= 1'b0;
         flush_all_ID <= 1'b0;
+        tlb_refetch_pc_ID <= 32'b0;
     end
     else if(allow_in_IF) begin
         pc_ID <= pc;
@@ -794,10 +808,12 @@ always @(posedge clk) begin
         exc_fs_tlb_refill_ID <= exc_fs_tlb_refill_IF;
         exc_fs_plv_invalid_ID <= exc_fs_plv_invalid_IF;
         exc_fs_fetch_invalid_ID <= exc_fs_fetch_invalid_IF;
+        tlb_refetch_ID <= tlb_refetch_found_ID;
         flush_all_ID <= ex_IF&&~flush_all;//!flush_all时需要清空所有的flush_all信号
+
     end
 end
-wire ex_IF = IF_ADEF || exc_fs_tlb_refill_IF || exc_fs_plv_invalid_IF || exc_fs_fetch_invalid_IF;
+wire ex_IF = IF_ADEF || exc_fs_tlb_refill_IF || exc_fs_plv_invalid_IF || exc_fs_fetch_invalid_IF || tlb_refetch_found_ID;
 
 always @(posedge clk) begin
     if(reset)
@@ -871,11 +887,12 @@ assign WAR = (rf_rd1_in_war&used_rj&~rf_rd1_is_forward&rf_rd1_nz)
 // tlb_refetch --exp19
 assign tlb_refetch_tlb_inst_ID = inst_tlbwr | inst_tlbfill | inst_tlbrd | inst_invtlb;
 assign tlb_refetch_csr_inst_ID = (inst_csrwr | inst_csrxchg) && (csr_num_ID == `CSR_CRMD || csr_num_ID == `CSR_DMW0 || csr_num_ID == `CSR_DMW1 || csr_num_ID == `CSR_ASID);
-assign tlb_refetch_ID = tlb_refetch_tlb_inst_ID && tlb_refetch_csr_inst_ID;
-
+assign tlb_refetch_found_ID = (tlb_refetch_tlb_inst_ID || tlb_refetch_csr_inst_ID)&~flush_all & valid_ID;
+reg tlb_refetch_ID;
+reg [31:0] tlb_refetch_pc_ID;
 
 always @(posedge clk) begin
-    if (reset || tlb_reflush) begin
+    if (reset) begin
         alu_src1_EX <= 32'b0;
         alu_src2_EX <= 32'b0;
         alu_op_EX   <= 12'b0;
@@ -975,6 +992,8 @@ always @(posedge clk) begin
     end
     else if(ertn_flush_WB)
         ertn_flush_EX <= 1'b0;
+    else if(tlb_refetch_WB)
+        tlb_refetch_EX <= 1'b0;
 end
 wire ex_ID=(inst_ertn | inst_syscall | has_int | INE_ID | inst_break);//将异常与valid分离
 
@@ -984,7 +1003,7 @@ always @(posedge clk) begin
     end
     else if(flush_all)
         valid_ID <= 1'b0;
-    else if(br_taken && effectful_ID && handshake_IF_ID) begin //只有IF取了错指令，而且ID指令有效，且EX准备接受，才把valid=0传下去
+    else if((br_taken) && effectful_ID && handshake_IF_ID) begin //只有IF取了错指令，而且ID指令有效，且EX准备接受，才把valid=0传下去
         valid_ID <= 1'b0;
     end
     else if(handshake_IF_ID) begin
@@ -1072,7 +1091,7 @@ assign mem_offset = alu_result[1:0];
 
 
 always @(posedge clk) begin
-    if (reset || tlb_reflush) begin
+    if (reset) begin
         res_from_mem_MEM <= 1'b0;
         rf_we_MEM <= 1'b0;
         dest_MEM <= 5'b0;
@@ -1182,6 +1201,8 @@ always @(posedge clk) begin
     end
     else if(ertn_flush_WB)
         ertn_flush_MEM <= 1'b0;
+    else if(tlb_refetch_WB)
+        tlb_refetch_MEM <= 1'b0;
 end
 wire ex_EX;
 assign ex_EX = ALE_EX | exc_es_load_invalid_EX | exc_es_store_invalid_EX | exc_es_modify_EX | exc_es_plv_invalid_EX | exc_es_tlb_refill_EX;
@@ -1252,7 +1273,7 @@ assign final_result_MEM = res_from_mem_MEM ? mem_result : result_all_MEM;
 // MEM --> WB CSR 的信号和数据传递
 
 always @(posedge clk) begin
-    if (reset || tlb_reflush) begin
+    if (reset) begin
         final_result_WB <= 32'b0;
         pc_WB <= 32'b0;
         dest_WB <= 5'b0;
@@ -1336,6 +1357,8 @@ always @(posedge clk) begin
     end
     else if(ertn_flush_WB)
         ertn_flush_WB <= 1'b0;
+    else if(tlb_refetch_WB)
+        tlb_refetch_WB <= 1'b0;
 end
 
 assign result_forward[1] = final_result_MEM;
@@ -1426,7 +1449,7 @@ assign to_csr_exc_fs_tlb_refill = exc_fs_tlb_refill_WB;
 assign to_csr_exc_fs_plv_invalid = exc_fs_plv_invalid_WB;
 
 //tlb_reflush
-assign tlb_reflush = tlb_refetch_WB;
+assign tlb_reflush = tlb_refetch_WB & valid_WB;
 assign tlb_reflush_pc = pc_WB;
 
 //exp18
@@ -1452,6 +1475,7 @@ assign csr_in_tlb_w_plv1    = tlb_out_r_e ? tlb_out_r_plv1 : 2'b0;
 assign csr_in_tlb_w_mat1    = tlb_out_r_e ? tlb_out_r_mat1 : 2'b0;
 assign csr_in_tlb_w_d1      = tlb_out_r_e ? tlb_out_r_d1   : 1'b0;
 assign csr_in_tlb_w_v1      = tlb_out_r_e ? tlb_out_r_v1   : 1'b0;
+wire estat_ecode;
 csr u_csr(
     .clk                (clk),
     .rst              (reset),

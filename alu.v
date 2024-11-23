@@ -48,9 +48,6 @@ wire [31:0] lui_result;
 wire [31:0] sll_result;
 wire [63:0] sr64_result;
 wire [31:0] sr_result;
-wire [31:0] mulw_result;
-wire [31:0] mulhw_result;
-wire [31:0] mulhwu_result;
 
 // 32-bit adder
 wire [31:0] adder_a;
