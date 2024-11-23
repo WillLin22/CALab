@@ -442,6 +442,14 @@ wire to_csr_exc_fs_tlb_refill, to_csr_exc_fs_plv_invalid; // 送往 CSR 例外�
 wire [1:0] crmd_datm;
 wire [1:0] crmd_plv;
 
+// tlb_crush_related --exp18&19
+wire tlb_reflush;
+wire [31:0] tlb_reflush_pc;
+wire tlb_refetch_ID, tlb_refetch_EX, tlb_refetch_MEM, tlb_refetch_WB;
+wire tlb_refetch_tlb_inst_ID, tlb_refetch_csr_inst_ID;
+wire inst_tlbrd_EX, inst_tlbrd_MEM, inst_tlbrd_WB;
+
+
 //新的添加的通路声明放这里
 //--  inst decode for ID
 assign op_31_26  = inst_ID[31:26];
@@ -701,6 +709,10 @@ always @(posedge clk) begin
         nextpc_reg <= ertn_pc;
         not_accepted <= 1'b1;
     end
+    else if(tlb_reflush & ~allow_in_IF) begin
+        nextpc_reg <= tlb_reflush_pc;
+        not_accepted <= 1'b1;
+    end
     else if(br_taken & effectful_ID & ~allow_in_IF)begin
         nextpc_reg <= br_target;
         not_accepted <= 1'b1;
@@ -712,7 +724,7 @@ always @(posedge clk) begin
 end
 assign seq_pc       = pc + 3'h4;
 assign inst_sram_wr = 1'b0;
-assign nextpc = not_accepted &~flush_all ? nextpc_reg : (exception_WB&&flush_all ? ex_entry : (ertn_flush_WB? ertn_pc : (br_taken & effectful_ID? br_target : seq_pc)));
+assign nextpc = not_accepted &~flush_all ? nextpc_reg : (exception_WB&&flush_all ? ex_entry : (ertn_flush_WB ? ertn_pc : (tlb_reflush ? tlb_reflush_pc : (br_taken & effectful_ID ? br_target : seq_pc))));
 // --exp19
 
 
@@ -767,7 +779,7 @@ end
 wire IF_ADEF = |nextpc_physical[1:0];//取指错误：pc非对齐
 
 always @(posedge clk) begin
-    if (reset) begin
+    if (reset || tlb_reflush) begin
         pc_ID <= 32'h0;
         exc_adef_ID <= 1'b0;
         exc_fs_tlb_refill_ID <= 1'b0;
@@ -855,10 +867,14 @@ assign WAR = (rf_rd1_in_war&used_rj&~rf_rd1_is_forward&rf_rd1_nz)
                       | reg_csr_in_war;
 //* end WAR
 
+// tlb_refetch --exp19
+assign tlb_refetch_tlb_inst_ID = inst_tlbwr | inst_tlbfill | inst_tlbrd | inst_invtlb;
+assign tlb_refetch_csr_inst_ID = (inst_csrwr | inst_csrxchg) && (csr_num_ID == `CSR_CRMD || csr_num_ID == `CAR_DMW0 || csr_num_ID == `CAR_DMW1 || csr_num_ID == `CAR_ASID);
+assign tlb_refetch_ID = tlb_refetch_tlb_inst_ID && tlb_refetch_csr_inst_ID;
 
 
 always @(posedge clk) begin
-    if (reset) begin
+    if (reset || tlb_reflush) begin
         alu_src1_EX <= 32'b0;
         alu_src2_EX <= 32'b0;
         alu_op_EX   <= 12'b0;
@@ -900,6 +916,7 @@ always @(posedge clk) begin
         exc_fs_tlb_refill_EX <= 1'b0;
         exc_fs_fetch_invalid_EX <= 1'b0;
         exc_fs_plv_invalid_EX <= 1'b0;
+        tlb_refetch_EX <= 1'b0;
         //exp18
         we_EX <= 1'b0;
         wop_EX <= 4'b0;
@@ -949,6 +966,7 @@ always @(posedge clk) begin
         exc_fs_tlb_refill_EX <= exc_fs_tlb_refill_ID;
         exc_fs_fetch_invalid_EX <= exc_fs_fetch_invalid_ID;
         exc_fs_plv_invalid_EX <= exc_fs_plv_invalid_ID;
+        tlb_refetch_EX <= tlb_refetch_ID;
         //exp18
         we_EX <= we_ID;
         wop_EX <= wop_ID;
@@ -1053,7 +1071,7 @@ assign mem_offset = alu_result[1:0];
 
 
 always @(posedge clk) begin
-    if (reset) begin
+    if (reset || tlb_reflush) begin
         res_from_mem_MEM <= 1'b0;
         rf_we_MEM <= 1'b0;
         dest_MEM <= 5'b0;
@@ -1105,6 +1123,7 @@ always @(posedge clk) begin
         exc_es_store_invalid_MEM <= 1'b0;
         exc_es_plv_invalid_MEM <= 1'b0;
         exc_es_modify_MEM <= 1'b0;
+        tlb_refetch_MEM <= 1'b0;
     end
     else if(handshake_EX_MEM)begin
         res_from_mem_MEM <= res_from_mem_EX;
@@ -1158,6 +1177,7 @@ always @(posedge clk) begin
         exc_es_store_invalid_MEM <= exc_es_store_invalid_EX;
         exc_es_plv_invalid_MEM <= exc_es_plv_invalid_EX;
         exc_es_modify_MEM <= exc_es_modify_EX;
+        tlb_refetch_MEM <= tlb_refetch_EX;
     end
     else if(ertn_flush_WB)
         ertn_flush_MEM <= 1'b0;
@@ -1231,7 +1251,7 @@ assign final_result_MEM = res_from_mem_MEM ? mem_result : result_all_MEM;
 // MEM --> WB CSR 的信号和数据传递
 
 always @(posedge clk) begin
-    if (reset) begin
+    if (reset || tlb_reflush) begin
         final_result_WB <= 32'b0;
         pc_WB <= 32'b0;
         dest_WB <= 5'b0;
@@ -1270,6 +1290,7 @@ always @(posedge clk) begin
         exc_es_store_invalid_WB <= 1'b0;
         exc_es_plv_invalid_WB <= 1'b0;
         exc_es_modify_WB <= 1'b0;
+        tlb_refetch_WB <= 1'b0;
     end
     else if(handshake_MEM_WB) begin
         final_result_WB <= final_result_MEM;
@@ -1310,6 +1331,7 @@ always @(posedge clk) begin
         exc_es_store_invalid_WB <= exc_es_store_invalid_MEM;
         exc_es_plv_invalid_WB <= exc_es_plv_invalid_MEM;
         exc_es_modify_WB <= exc_es_modify_MEM;
+        tlb_refetch_WB <= tlb_refetch_MEM;
     end
     else if(ertn_flush_WB)
         ertn_flush_WB <= 1'b0;
@@ -1401,6 +1423,10 @@ assign wb_pc = pc_WB;// 来自WB级的异常发生地址
 assign wb_vaddr = vaddr_WB;// 来自WB级的异常发生地址 
 assign to_csr_exc_fs_tlb_refill = exc_fs_tlb_refill_WB;
 assign to_csr_exc_fs_plv_invalid = exc_fs_plv_invalid_WB;
+
+//tlb_reflush
+assign tlb_reflush = tlb_refetch_WB;
+assign tlb_reflush_pc = pc_WB;
 
 //exp18
 wire wop_srch = wop_WB[0];
