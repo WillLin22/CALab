@@ -102,6 +102,8 @@ reg [TLBNUM-1:0]             tlb_d1     ;
 reg [TLBNUM-1:0]             tlb_v1     ;
 //search
 wire [TLBNUM-1:0] s0_mtch, s1_mtch, tlbsrch_mtch;
+wire s0_error, s1_error, srch_error;
+wire match_error = s0_found&s0_error|s1_found&s1_error|tlbsrch_found&srch_error;
 tlb_search_match s0
 (
     .s_vppn(s0_vppn),
@@ -190,6 +192,11 @@ tlb_search_match s0
     .index(s0_index),
     .mtch(s0_mtch)
 );
+encoder_16_check s0_check
+(
+    .in(s0_mtch),
+    .error(s0_error)
+);
 tlb_search_match s1
 (
     .s_vppn(s1_vppn),
@@ -277,6 +284,11 @@ tlb_search_match s1
     .match(s1_found),
     .index(s1_index),
     .mtch(s1_mtch)
+);
+encoder_16_check s1_check
+(
+    .in(s1_mtch),
+    .error(s1_error)
 );
 
 integer i;
@@ -384,6 +396,11 @@ tlb_search_match tlb_srch
     .match(tlbsrch_found),
     .index(tlbsrch_index),
     .mtch(tlbsrch_mtch)
+);
+encoder_16_check tlbsrch_check
+(
+    .in(tlbsrch_mtch),
+    .error(srch_error)
 );
 
 

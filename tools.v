@@ -81,3 +81,19 @@ generate for (i=0; i<64; i=i+1) begin : gen_for_dec_6_64
 end endgenerate
 
 endmodule
+
+module encoder_16_check(
+    input  wire [15:0] in,
+    output wire error
+);
+wire [119:0]check;
+genvar i, j;
+generate
+    for (i = 0; i < 15; i = i + 1) begin : gen_outer_loop
+        for (j = i + 1; j < 16; j = j + 1) begin : gen_inner_loop
+            assign check[(30-i+1)*i/2 + (j - i - 1)] = in[i] & in[j];
+        end
+    end
+endgenerate
+assign error = |check;
+endmodule
