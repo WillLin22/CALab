@@ -25,34 +25,34 @@ endmodule
 
 module encoder_16_4(
     input  wire [15:0] in,
-    output reg [ 3:0] out
+    output wire [ 3:0] out
 );
 
 
-// assign out[0] = in[1] | in[3] | in[5] | in[7] | in[9] | in[11] | in[13] | in[15];
-// assign out[1] = in[2] | in[3] | in[6] | in[7] | in[10] | in[11] | in[14] | in[15];
-// assign out[2] = in[4] | in[5] | in[6] | in[7] | in[12] | in[13] | in[14] | in[15];
-// assign out[3] = in[8] | in[9] | in[10] | in[11] | in[12] | in[13] | in[14] | in[15];
+assign out[0] = in[1] | in[3] | in[5] | in[7] | in[9] | in[11] | in[13] | in[15];
+assign out[1] = in[2] | in[3] | in[6] | in[7] | in[10] | in[11] | in[14] | in[15];
+assign out[2] = in[4] | in[5] | in[6] | in[7] | in[12] | in[13] | in[14] | in[15];
+assign out[3] = in[8] | in[9] | in[10] | in[11] | in[12] | in[13] | in[14] | in[15];
 
-always @(*) begin
-    if(in[0] == 1) out = 0;
-    else if(in[1] == 1) out = 1;
-    else if(in[2] == 1) out = 2;
-    else if(in[3] == 1) out = 3;
-    else if(in[4] == 1) out = 4;
-    else if(in[5] == 1) out = 5;
-    else if(in[6] == 1) out = 6;
-    else if(in[7] == 1) out = 7;
-    else if(in[8] == 1) out = 8;
-    else if(in[9] == 1) out = 9;
-    else if(in[10] == 1) out = 10; 
-    else if(in[11] == 1) out = 11;
-    else if(in[12] == 1) out = 12;
-    else if(in[13] == 1) out = 13;
-    else if(in[14] == 1) out = 14;
-    else if(in[15] == 1) out = 15;
-    else out = 0;
-end
+// always @(*) begin
+//     if(in[0] == 1) out = 0;
+//     else if(in[1] == 1) out = 1;
+//     else if(in[2] == 1) out = 2;
+//     else if(in[3] == 1) out = 3;
+//     else if(in[4] == 1) out = 4;
+//     else if(in[5] == 1) out = 5;
+//     else if(in[6] == 1) out = 6;
+//     else if(in[7] == 1) out = 7;
+//     else if(in[8] == 1) out = 8;
+//     else if(in[9] == 1) out = 9;
+//     else if(in[10] == 1) out = 10; 
+//     else if(in[11] == 1) out = 11;
+//     else if(in[12] == 1) out = 12;
+//     else if(in[13] == 1) out = 13;
+//     else if(in[14] == 1) out = 14;
+//     else if(in[15] == 1) out = 15;
+//     else out = 0;
+// end
 
 endmodule
 

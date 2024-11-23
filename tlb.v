@@ -93,14 +93,15 @@ reg              tlb_g      [TLBNUM-1:0];
 reg [19:0]       tlb_ppn0   [TLBNUM-1:0];
 reg [ 1:0]       tlb_plv0   [TLBNUM-1:0];
 reg [ 1:0]       tlb_mat0   [TLBNUM-1:0];
-reg              tlb_d0     [TLBNUM-1:0];
-reg              tlb_v0     [TLBNUM-1:0];
+reg [TLBNUM-1:0]            tlb_d0     ;
+reg [TLBNUM-1:0]             tlb_v0     ;
 reg [19:0]       tlb_ppn1   [TLBNUM-1:0];
 reg [ 1:0]       tlb_plv1   [TLBNUM-1:0];
 reg [ 1:0]       tlb_mat1   [TLBNUM-1:0];
-reg              tlb_d1     [TLBNUM-1:0];
-reg              tlb_v1     [TLBNUM-1:0];
+reg [TLBNUM-1:0]             tlb_d1     ;
+reg [TLBNUM-1:0]             tlb_v1     ;
 //search
+wire [TLBNUM-1:0] s0_mtch, s1_mtch, tlbsrch_mtch;
 tlb_search_match s0
 (
     .s_vppn(s0_vppn),
@@ -170,7 +171,8 @@ tlb_search_match s0
     .tlb_g_14(tlb_g[14]),
     .tlb_g_15(tlb_g[15]),
     .match(s0_found),
-    .index(s0_index)
+    .index(s0_index),
+    .mtch(s0_mtch)
 );
 tlb_search_match s1
 (
@@ -241,25 +243,26 @@ tlb_search_match s1
     .tlb_g_14(tlb_g[14]),
     .tlb_g_15(tlb_g[15]),
     .match(s1_found),
-    .index(s1_index)
+    .index(s1_index),
+    .mtch(s1_mtch)
 );
 
-wire s0_odd = tlb_ps4MB[s0_index] ? s0_vppn[8] : s0_va_bit12;
-wire s1_odd = tlb_ps4MB[s1_index] ? s1_vppn[8] : s1_va_bit12;
-
+integer i;
+wire s0_odd = (|(tlb_ps4MB&s0_mtch)) ? s0_vppn[8] : s0_va_bit12;
+wire s1_odd = (|(tlb_ps4MB&s1_mtch)) ? s1_vppn[8] : s1_va_bit12;
 
 assign s0_ppn = s0_odd ? tlb_ppn1[s0_index] : tlb_ppn0[s0_index];
 assign s1_ppn = s1_odd ? tlb_ppn1[s1_index] : tlb_ppn0[s1_index];
-assign s0_ps  = tlb_ps4MB[s0_index]?6'd21:6'd12;
-assign s1_ps  = tlb_ps4MB[s1_index]?6'd21:6'd12;
+assign s0_ps  = (|(tlb_ps4MB&s0_mtch)) ?6'd21:6'd12;
+assign s1_ps  = (|(tlb_ps4MB&s1_mtch)) ?6'd21:6'd12;
 assign s0_plv = s0_odd ? tlb_plv1[s0_index] : tlb_plv0[s0_index];
 assign s1_plv = s1_odd ? tlb_plv1[s1_index] : tlb_plv0[s1_index];
 assign s0_mat = s0_odd ? tlb_mat1[s0_index] : tlb_mat0[s0_index];
 assign s1_mat = s1_odd ? tlb_mat1[s1_index] : tlb_mat0[s1_index];
-assign s0_d   = s0_odd ? tlb_d1[s0_index] : tlb_d0[s0_index];
-assign s1_d   = s1_odd ? tlb_d1[s1_index] : tlb_d0[s1_index];
-assign s0_v   = s0_odd ? tlb_v1[s0_index] : tlb_v0[s0_index];
-assign s1_v   = s1_odd ? tlb_v1[s1_index] : tlb_v0[s1_index];
+assign s0_d   = s0_odd ? (|(tlb_d1&s0_mtch)) : (|(tlb_d0&s0_mtch));
+assign s1_d   = s1_odd ? (|(tlb_d1&s1_mtch)) : (|(tlb_d0&s1_mtch));
+assign s0_v   = s0_odd ? (|(tlb_v1&s0_mtch)) : (|(tlb_v0&s0_mtch));
+assign s1_v   = s1_odd ? (|(tlb_v1&s1_mtch)) : (|(tlb_v0&s1_mtch));
 
 //tlbsrch
 tlb_search_match tlb_srch
@@ -331,12 +334,12 @@ tlb_search_match tlb_srch
     .tlb_g_14(tlb_g[14]),
     .tlb_g_15(tlb_g[15]),
     .match(tlbsrch_found),
-    .index(tlbsrch_index)
+    .index(tlbsrch_index),
+    .mtch(tlbsrch_mtch)
 );
 
 
 //invtlb
-integer i;
 always @(posedge clk) begin
     if(rst) begin
         for(i=0;i<TLBNUM;i=i+1)begin
@@ -525,9 +528,9 @@ module tlb_search_match
     input  wire        tlb_g_14,
     input  wire        tlb_g_15,
     output wire match,
-    output wire [$clog2(TLBNUM)-1:0] index
+    output wire [$clog2(TLBNUM)-1:0] index,
+    output wire [TLBNUM-1:0] mtch
 );
-wire [TLBNUM-1:0] mtch;
 assign match = |mtch;
 encoder_16_4 e(.in(mtch), .out(index));
 

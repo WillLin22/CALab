@@ -48,7 +48,6 @@ always @(posedge clk) begin
 end
 
 wire [31:0] seq_pc;
-reg [31:0] nextpc;
 wire        br_taken;
 wire [31:0] br_target;
 wire [31:0] inst = inst_sram_rdata;
@@ -639,7 +638,7 @@ assign ex_trans_tlb = ~crmd_da & crmd_pg & ~ex_trans_dmw0 & ~ex_trans_dmw1;
 assign addr_ex_physical = ex_trans_direct ? addr_ex_direct 
                         : (ex_trans_dmw0 ? addr_ex_dmw0 
                         : (ex_trans_dmw1 ? addr_ex_dmw1 
-                        : (ex_trans_tlb ? addr_ex_tlb : 32'b0)));
+                        : (addr_ex_tlb)));//ex_trans_tlb 
 
 assign  mem_wdata_ID = rkd_value;
 
@@ -724,6 +723,13 @@ end
 assign seq_pc       = pc + 3'h4;
 assign inst_sram_wr = 1'b0;
 // assign nextpc = not_accepted &~flush_all ? nextpc_reg : (exception_WB&&flush_all ? ex_entry : (ertn_flush_WB ? ertn_pc : (tlb_reflush ? tlb_reflush_pc : (br_taken & effectful_ID ? br_target : seq_pc))));
+reg [31:0] nextpc;
+// assign nextpc = ({32{not_accepted & ~flush_all}}&nextpc_reg)
+//                 | ({32{exception_WB && flush_all}}&ex_entry)
+//                 | ({32{ertn_flush_WB}}&ertn_pc)
+//                 | ({32{tlb_reflush}}&tlb_reflush_pc)
+//                 | ({32{br_taken && effectful_ID}}&br_target)
+//                 | ({32{allow_in_IF}}&seq_pc);
 
 always @(*) begin
     if (not_accepted & ~flush_all)
