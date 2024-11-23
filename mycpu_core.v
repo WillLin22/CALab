@@ -445,7 +445,8 @@ wire [1:0] crmd_plv;
 // tlb_crush_related --exp18&19
 wire tlb_reflush;
 wire [31:0] tlb_reflush_pc;
-wire tlb_refetch_ID, tlb_refetch_EX, tlb_refetch_MEM, tlb_refetch_WB;
+wire tlb_refetch_ID;
+reg tlb_refetch_EX, tlb_refetch_MEM, tlb_refetch_WB;
 wire tlb_refetch_tlb_inst_ID, tlb_refetch_csr_inst_ID;
 wire inst_tlbrd_EX, inst_tlbrd_MEM, inst_tlbrd_WB;
 
@@ -869,7 +870,7 @@ assign WAR = (rf_rd1_in_war&used_rj&~rf_rd1_is_forward&rf_rd1_nz)
 
 // tlb_refetch --exp19
 assign tlb_refetch_tlb_inst_ID = inst_tlbwr | inst_tlbfill | inst_tlbrd | inst_invtlb;
-assign tlb_refetch_csr_inst_ID = (inst_csrwr | inst_csrxchg) && (csr_num_ID == `CSR_CRMD || csr_num_ID == `CAR_DMW0 || csr_num_ID == `CAR_DMW1 || csr_num_ID == `CAR_ASID);
+assign tlb_refetch_csr_inst_ID = (inst_csrwr | inst_csrxchg) && (csr_num_ID == `CSR_CRMD || csr_num_ID == `CSR_DMW0 || csr_num_ID == `CSR_DMW1 || csr_num_ID == `CSR_ASID);
 assign tlb_refetch_ID = tlb_refetch_tlb_inst_ID && tlb_refetch_csr_inst_ID;
 
 
