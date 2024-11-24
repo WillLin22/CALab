@@ -327,10 +327,6 @@ wire [ 1:0]                 tlb_dmw1_mat;
 wire [ 2:0]                 tlb_dmw1_pseg;
 wire [ 2:0]                 tlb_dmw1_vseg;
 //nextpc  --exp19
-wire [31:0]                 nextpc_direct; // 直接地址翻译
-wire [31:0]                 nextpc_dmw0, nextpc_dmw1; // 直接映射窗口地址翻译
-wire [31:0]                 nextpc_tlb;    // tlb地址翻译
-wire [31:0]                 nextpc_physical; // 物理地址
 
 // addr_EX  --exp19
 wire [31:0]                 addr_ex_direct; // 访存直接地址翻译
@@ -446,7 +442,6 @@ wire [31:0] tlb_reflush_pc;
 reg tlb_refetch_EX, tlb_refetch_MEM, tlb_refetch_WB;
 wire tlb_refetch_tlb_inst_ID, tlb_refetch_csr_inst_ID;
 
-// reg tlb_refetch_pc_EX, tlb_refetch_pc_MEM, tlb_refetch_pc_WB;
 
 //新的添加的通路声明放这里
 //--  inst decode for ID
@@ -623,17 +618,17 @@ assign exc_es_plv_invalid_EX = ex_trans_tlb & (res_from_mem_EX | mem_we_EX) & tl
 assign exc_es_modify_EX = ex_trans_tlb & mem_we_EX & tlb_out_s1_found & tlb_out_s1_v & ~tlb_out_s1_d & (crmd_plv <= tlb_out_s1_plv); // store 操作的虚地址在 TLB 中找到了匹配，且 V=1，且特权等级合规的项，但是该页表项的 D 位为 0，将触发该例外。
 
 // EX 虚实地址转换 --exp19
-assign addr_ex_direct = alu_result;
-assign tlb_in_s1_vppn = alu_result[31:13];
-assign tlb_in_s1_va_bit12 = alu_result[12];
+assign addr_ex_direct = alu_add_sub_result;
+assign tlb_in_s1_vppn = addr_ex_direct[31:13];
+assign tlb_in_s1_va_bit12 = addr_ex_direct[12];
 assign tlb_in_s1_asid = csr_out_tlb_r_asid;
-assign addr_ex_dmw0 = {tlb_dmw0_pseg, alu_result[28:0]};
-assign addr_ex_dmw1 = {tlb_dmw1_pseg, alu_result[28:0]};
-assign addr_ex_tlb = {tlb_out_s1_ppn, alu_result[11:0]};
+assign addr_ex_dmw0 = {tlb_dmw0_pseg, addr_ex_direct[28:0]};
+assign addr_ex_dmw1 = {tlb_dmw1_pseg, addr_ex_direct[28:0]};
+assign addr_ex_tlb = {tlb_out_s1_ppn, addr_ex_direct[11:0]};
 
 assign ex_trans_direct = crmd_da & ~crmd_pg;
-assign ex_trans_dmw0 = ((crmd_plv == 0 && tlb_dmw0_plv0) || (crmd_plv == 3 && tlb_dmw0_plv3)) && (crmd_datm == tlb_dmw0_mat) && (alu_result[31:29] == tlb_dmw0_vseg);
-assign ex_trans_dmw1 = ((crmd_plv == 0 && tlb_dmw1_plv0) || (crmd_plv == 3 && tlb_dmw1_plv3)) && (crmd_datm == tlb_dmw1_mat) && (alu_result[31:29] == tlb_dmw1_vseg);
+assign ex_trans_dmw0 = ((crmd_plv == 0 && tlb_dmw0_plv0) || (crmd_plv == 3 && tlb_dmw0_plv3)) && (crmd_datm == tlb_dmw0_mat) && (addr_ex_direct[31:29] == tlb_dmw0_vseg);
+assign ex_trans_dmw1 = ((crmd_plv == 0 && tlb_dmw1_plv0) || (crmd_plv == 3 && tlb_dmw1_plv3)) && (crmd_datm == tlb_dmw1_mat) && (addr_ex_direct[31:29] == tlb_dmw1_vseg);
 assign ex_trans_tlb = ~crmd_da & crmd_pg & ~ex_trans_dmw0 & ~ex_trans_dmw1;
 assign addr_ex_physical = ex_trans_direct ? addr_ex_direct 
                         : (ex_trans_dmw0 ? addr_ex_dmw0 
@@ -749,38 +744,42 @@ end
 
 
 
-assign nextpc_direct = nextpc;
-assign tlb_in_s0_vppn = nextpc[31:13];
-assign tlb_in_s0_va_bit12 = nextpc[12];
+wire [31:0]                 pc_direct; // 直接地址翻译
+wire [31:0]                 pc_dmw0, nextpc_dmw1; // 直接映射窗口地址翻译
+wire [31:0]                 pc_tlb;    // tlb地址翻译
+wire [31:0]                 pc_physical; // 物理地址
+assign pc_direct = pc;
+assign tlb_in_s0_vppn = pc_direct[31:13];
+assign tlb_in_s0_va_bit12 = pc_direct[12];
 assign tlb_in_s0_asid = csr_out_tlb_r_asid;
-assign nextpc_dmw0 = {tlb_dmw0_pseg, nextpc[28:0]};
-assign nextpc_dmw1 = {tlb_dmw1_pseg, nextpc[28:0]};
-assign nextpc_tlb = {tlb_out_s0_ppn, nextpc[11:0]};
+assign pc_dmw0 = {tlb_dmw0_pseg, pc_direct[28:0]};
+assign pc_dmw1 = {tlb_dmw1_pseg, pc_direct[28:0]};
+assign pc_tlb = {tlb_out_s0_ppn, pc_direct[11:0]};
 // 选择 nextpc 的来源 翻译为物理地址
 assign if_trans_direct = crmd_da & ~crmd_pg;
-assign if_trans_dmw0 = ((crmd_plv == 0 && tlb_dmw0_plv0) || (crmd_plv == 3 && tlb_dmw0_plv3)) && (nextpc[31:29] == tlb_dmw0_vseg); // 虚地址的最高 3 位（[31:29]位）与配置窗口寄存器中的[31:29]相等，且当前特权等级在该配置窗口中被允许。 讲义5.2.1节
-assign if_trans_dmw1 = ((crmd_plv == 0 && tlb_dmw1_plv0) || (crmd_plv == 3 && tlb_dmw1_plv3)) && (nextpc[31:29] == tlb_dmw1_vseg); // 虚地址的最高 3 位（[31:29]位）与配置窗口寄存器中的[31:29]相等，且当前特权等级在该配置窗口中被允许。 讲义5.2.1节
+assign if_trans_dmw0 = ((crmd_plv == 0 && tlb_dmw0_plv0) || (crmd_plv == 3 && tlb_dmw0_plv3)) && (pc_direct[31:29] == tlb_dmw0_vseg); // 虚地址的最高 3 位（[31:29]位）与配置窗口寄存器中的[31:29]相等，且当前特权等级在该配置窗口中被允许。 讲义5.2.1节
+assign if_trans_dmw1 = ((crmd_plv == 0 && tlb_dmw1_plv0) || (crmd_plv == 3 && tlb_dmw1_plv3)) && (pc_direct[31:29] == tlb_dmw1_vseg); // 虚地址的最高 3 位（[31:29]位）与配置窗口寄存器中的[31:29]相等，且当前特权等级在该配置窗口中被允许。 讲义5.2.1节
 assign if_trans_tlb = ~crmd_da & crmd_pg & ~if_trans_dmw0 & ~if_trans_dmw1;
-assign nextpc_physical = if_trans_direct ? nextpc_direct : (if_trans_dmw0 ? nextpc_dmw0 : (if_trans_dmw1 ? nextpc_dmw1 : (if_trans_tlb ? nextpc_tlb : 32'b0)));
+assign pc_physical = if_trans_direct ? pc_direct : (if_trans_dmw0 ? pc_dmw0 : (if_trans_dmw1 ? pc_dmw1 : (if_trans_tlb ? pc_tlb : 32'b0)));
 
 assign inst_sram_req = ~ex_IF & req_inst;
 assign inst_sram_we = |inst_sram_wstrb;
 assign inst_sram_size = 2'b10;
 assign inst_sram_wstrb = 4'b0;
-assign inst_sram_addr = nextpc_physical_reg;
+assign inst_sram_addr = pc_physical;
 assign inst_sram_wdata = 32'b0;
 assign addr_ok_inst = inst_sram_addr_ok;
 assign data_ok_inst = inst_sram_data_ok;
 
-reg [32:0] nextpc_physical_reg;
+// reg [32:0] nextpc_physical_reg;
 always @(posedge clk) begin
     if (reset) begin
         pc <= 32'h1bfffffc;     //trick: to make nextpc be 0x1c000000 during reset 
-        nextpc_physical_reg <= 32'h1bfffffc;
+        // nextpc_physical_reg <= 32'h1bfffffc;
     end
     else if(allow_in_IF) begin
         pc <= nextpc;
-        nextpc_physical_reg <= nextpc_physical;
+        // nextpc_physical_reg <= nextpc_physical;
     end
 end
 
@@ -796,7 +795,7 @@ always @(posedge clk) begin
     else if(data_ok_inst)
         instreg_IF <= inst_sram_rdata;
 end
-wire IF_ADEF = |nextpc[1:0];//取指错误：pc非对齐
+wire IF_ADEF = |pc[1:0];//取指错误：pc非对齐
 
 always @(posedge clk) begin
     if (reset) begin
@@ -806,7 +805,6 @@ always @(posedge clk) begin
         exc_fs_plv_invalid_ID <= 1'b0;
         exc_fs_fetch_invalid_ID <= 1'b0;
         flush_all_ID <= 1'b0;
-        tlb_refetch_pc_ID <= 32'b0;
     end
     else if(allow_in_IF) begin
         pc_ID <= pc;
@@ -895,7 +893,6 @@ assign tlb_refetch_tlb_inst_ID = inst_tlbwr | inst_tlbfill | inst_tlbrd | inst_i
 assign tlb_refetch_csr_inst_ID = (inst_csrwr | inst_csrxchg) && (csr_num_ID == `CSR_CRMD || csr_num_ID == `CSR_DMW0 || csr_num_ID == `CSR_DMW1 || csr_num_ID == `CSR_ASID);
 assign tlb_refetch_found_ID = (tlb_refetch_tlb_inst_ID || tlb_refetch_csr_inst_ID)&~flush_all & valid_ID;
 reg tlb_refetch_ID;
-reg [31:0] tlb_refetch_pc_ID;
 
 always @(posedge clk) begin
     if (reset) begin
@@ -1019,11 +1016,13 @@ end
 
 //-- EX stage
 
+wire[31:0] alu_add_sub_result;
 alu u_alu(
     .alu_op     (alu_op_EX    ),
     .alu_src1   (alu_src1_EX  ),
     .alu_src2   (alu_src2_EX  ),
-    .alu_result (alu_result) //contain mul type insts
+    .alu_result (alu_result), //contain mul type insts
+    .add_sub_result (alu_add_sub_result)
     );
 
 wire [31:0] divider_dividend,divider_divisor;
@@ -1090,7 +1089,7 @@ assign div_result = (inst_div_wu_EX | inst_div_w_EX) ? divider_res_reg : divider
 wire[31:0] result_all;
 assign result_all = if_divider_EX ? div_result : alu_result;
 wire[1:0] mem_offset;
-assign mem_offset = alu_result[1:0];
+assign mem_offset = addr_ex_direct[1:0];
 
 
 // EX --> MEM CSR 的信号和数据传递
@@ -1182,7 +1181,7 @@ always @(posedge clk) begin
         csr_wvalue_MEM <= rkd_value_EX;
 
         flush_all_MEM <= (flush_all_EX|ex_EX)&~flush_all;
-        vaddr_MEM <= alu_result;
+        vaddr_MEM <= addr_ex_direct;
 
         exc_syscall_MEM <= exc_syscall_EX;
         exc_adef_MEM <= exc_adef_EX;
@@ -1261,7 +1260,7 @@ assign mem_result   = mem_byte_MEM ? {{24{mem_signed_MEM & mem_rdata_b[7]}}, mem
                       mem_half_MEM ? {{16{mem_signed_MEM & mem_rdata_h[15]}}, mem_rdata_h[15:0]} :
                     mem_rdata_w;
 
-assign ALE_EX = mem_en && (mem_word_EX&& |alu_result[1:0] || mem_half_EX&&alu_result[0]);//访存错误：地址非对齐
+assign ALE_EX = mem_en && (mem_word_EX&& |addr_ex_direct[1:0] || mem_half_EX&&addr_ex_direct[0]);//访存错误：地址非对齐
 
 decoder_2_4 u_dec4(
     .in(mem_offset_MEM),
@@ -1481,7 +1480,8 @@ assign csr_in_tlb_w_plv1    = tlb_out_r_e ? tlb_out_r_plv1 : 2'b0;
 assign csr_in_tlb_w_mat1    = tlb_out_r_e ? tlb_out_r_mat1 : 2'b0;
 assign csr_in_tlb_w_d1      = tlb_out_r_e ? tlb_out_r_d1   : 1'b0;
 assign csr_in_tlb_w_v1      = tlb_out_r_e ? tlb_out_r_v1   : 1'b0;
-wire estat_ecode;
+wire [1:0] crmd_datf;
+wire [5:0] estat_ecode;
 csr u_csr(
     .clk                (clk),
     .rst              (reset),

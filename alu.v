@@ -2,7 +2,8 @@ module alu(
   input  wire [14:0] alu_op,
   input  wire [31:0] alu_src1,
   input  wire [31:0] alu_src2,
-  output wire [31:0] alu_result
+  output wire [31:0] alu_result,
+  output wire [31:0] add_sub_result
 );
 wire op_add;   //add operation
 wire op_sub;   //sub operation
@@ -37,7 +38,6 @@ assign op_mul_w = alu_op[12];
 assign op_mulh_w = alu_op[13];
 assign op_mulh_wu = alu_op[14];
 
-wire [31:0] add_sub_result;
 wire [31:0] slt_result;
 wire [31:0] sltu_result;
 wire [31:0] and_result;

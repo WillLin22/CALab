@@ -118,8 +118,8 @@ module cpu_bridge_axi(
     reg [2:0] r_next_state;
     reg [4:0] w_current_state;
     reg [4:0] w_next_state;
-    reg [1:0] b_current_state;
-    reg [1:0] b_next_state;
+    reg [2:0] b_current_state;
+    reg [2:0] b_next_state;
 
     // 请求已经握手成功而未响应的情况，用于计数
 	reg [1:0] ar_wait_resp_cnt;
