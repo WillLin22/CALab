@@ -75,3 +75,12 @@ generate for (i=0; i<64; i=i+1) begin : gen_for_dec_6_64
 end endgenerate
 
 endmodule
+
+module encoder_2_1 (
+    input  wire [1:0] in,
+    output wire out,
+    output wire error
+);
+assign out = in[1];
+assign error = &in;  
+endmodule
