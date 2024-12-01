@@ -6,7 +6,7 @@ module CacheIdxGen (
     input reset,
     input clk,
     input en,
-    output reg [$clog2(WAY)-1:0] way
+    output reg [$clog2(`WAY)-1:0] way
 );
 always @(posedge clk) begin
     if (reset) begin
@@ -22,45 +22,75 @@ module DWrapper (
     input en,
     input wr, // 1 for wr, 0 for rd
     input wr_way,
-    input [INDEXLEN-1:0] idx,
+    input [`INDEXLEN-1:0] idx,
     input set,// 1 for set, 0 for clear
     output D0,
     output D1
 );
-//TODO: add instantiation of RAM
+D_bank1 Dinst1(
+    .addra(idx),
+    .clka(clk),
+    .dina(set),
+    .douta(D0),
+    .ena(en),
+    .wea(wr&&wr_way==0)
+);
+D_bank2 Dinst2(
+    .addra(idx),
+    .clka(clk),
+    .dina(set),
+    .douta(D1),
+    .ena(en),
+    .wea(wr&&wr_way==1)
+);
 endmodule
 
 module TagVWrapper (
-    input reset,
     input clk,
     input en,
     input wr, // 1 for wr, 0 for rd
-    input  [INDEXLEN-1:0]       idx,
-    input  [TAGLEN-1:0]         Tag,
-    output [TAGVLEN-1:0]        tagvr1,
-    output [TAGVLEN-1:0]        tagvr2
+    input wr_way,
+    input  [`INDEXLEN-1:0]       idx,
+    input  [`TAGLEN-1:0]         Tag,
+    output [`TAGVLEN-1:0]        tagvr1,
+    output [`TAGVLEN-1:0]        tagvr2
 );
-//TODO: add instantiation of RAM
+tagv_bank1 tagv1(
+    .addra(idx),
+    .clka(clk),
+    .dina({Tag, 1'b1}),
+    .douta(tagvr1),
+    .ena(en),
+    .wea(wr&&wr_way==0)
+);
+tagv_bank2 tagv2(
+    .addra(idx),
+    .clka(clk),
+    .dina({Tag, 1'b1}),
+    .douta(tagvr2),
+    .ena(en),
+    .wea(wr&&wr_way==1)
+);
 endmodule
 module HitGen (
     input reset,
     input clk,
-    input [TAGVLEN-1:0] tagv1,
-    input [TAGVLEN-1:0] tagv2,
-    input [TAGLEN-1:0] Tag,
+    input [`TAGVLEN-1:0] tagv1,
+    input [`TAGVLEN-1:0] tagv2,
+    input [`TAGLEN-1:0] Tag,
     input en_for_miss,// set for 1 cycle each nothit, connect with REPLACE
     output hit,
-    output [$clog2(WAY)-1:0] way,
+    output [$clog2(`WAY)-1:0] way,
     output error
 );
-wire [TAGVLEN-1:0] tagv[2];
+wire [`TAGVLEN-1:0] tagv[1:0];
 assign tagv[0] = tagvr1;
 assign tagv[1] = tagvr2;
 wire [1:0] hitway;
 wire way_e, way_gen;
 genvar i;
-generate for(i = 0;i < WAY; i=i+1) begin : hitway_gen
-    assign hitway[i] = tagv[i][TAGR] == Tag && tagv[i][VR] == 1;
+generate for(i = 0;i < `WAY; i=i+1) begin : hitway_gen
+    assign hitway[i] = tagv[i][`TAGR] == Tag && tagv[i][`VR] == 1;
 end
 endgenerate
 assign hit = |hitway;
@@ -80,18 +110,32 @@ assign way = hit ? way_e : way_gen;
 endmodule
 
 module DataWrapper (
-    input reset,
     input clk,
     input en,
     input                           wr, // 1 for wr, 0 for rd for each bit
     input                           wr_way,
-    input [WIDTH-1:0]               wstrb,
-    input [WIDTH*8-1:0]             wdata,
-    input [INDEXLEN-1:0]            idx,
-    output [WIDTH*8-1:0]            rd1,
-    output [WIDTH*8-1:0]            rd2
+    input [`WIDTH-1:0]               wstrb,
+    input [`WIDTH*8-1:0]             wdata,
+    input [`INDEXLEN-1:0]            idx,
+    output [`WIDTH*8-1:0]            rd1,
+    output [`WIDTH*8-1:0]            rd2
 );
-// TODO: add instantiation of RAM
+data_bank1 data1(
+    .addra(idx),
+    .clka(clk),
+    .dina(wdata),
+    .douta(rd1),
+    .ena(en),
+    .wea({`WIDTH{wr&&wr_way==0}} & wstrb)
+);
+data_bank2 data2(
+    .addra(idx),
+    .clka(clk),
+    .dina(wdata),
+    .douta(rd2),
+    .ena(en),
+    .wea({`WIDTH{wr&&wr_way==1}} & wstrb)
+);
 endmodule
 
 module Extend_32_128 (
