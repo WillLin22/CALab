@@ -6,13 +6,14 @@ module CacheIdxGen (
     input reset,
     input clk,
     input en,
-    output reg [$clog2(`WAY)-1:0] way
+    input [`INDEXLEN-1:0]   idx,
+    output reg [`INDEX-1:0] way
 );
 always @(posedge clk) begin
     if (reset) begin
         way <= 0;
     end else if (en) begin
-        way <= way + 1;
+        way[idx] <= way[idx] ^1'b1;
     end
 end
 endmodule
@@ -84,8 +85,8 @@ module HitGen (
     output error
 );
 wire [`TAGVLEN-1:0] tagv[1:0];
-assign tagv[0] = tagvr1;
-assign tagv[1] = tagvr2;
+assign tagv[0] = tagv1;
+assign tagv[1] = tagv2;
 wire [1:0] hitway;
 wire way_e, way_gen;
 genvar i;
@@ -104,7 +105,7 @@ CacheIdxGen idxgen(
     .reset(reset),
     .clk(clk),
     .en(en_for_miss),
-    .way(way_wr)
+    .way(way_gen)
 ); 
 assign way = hit ? way_e : way_gen;
 endmodule
@@ -152,7 +153,7 @@ decoder_2_4 dec(
 );
 genvar i;
 generate for(i = 0;i < 4; i=i+1) begin : strb_gen
-    assign strb_out[i+3:i] = {4{strb_4[i]}} & strb_in;
+    assign strb_out[i*4+3:i*4] = {4{strb_4[i]}} & strb_in;
 end
 endgenerate
 assign out = {4{in}};
@@ -167,7 +168,7 @@ module MissRdState (
     output rd_req,
     output rd_ok,
     input ret_valid,
-    input [1:0] ret_last
+    input ret_last
 );
 reg [2:0] state;
 always @(posedge clk)begin
@@ -182,7 +183,7 @@ always @(posedge clk)begin
 
 end
 assign rd_req = state[1] && rd_rdy;
-assign rd_ok = ret_last!=0;
+assign rd_ok = ret_last;
     
 endmodule
 module Fetch_128_32 (
@@ -190,5 +191,13 @@ module Fetch_128_32 (
     input [127:0] in,
     output [31:0] out
 );
-assign out = in[32*offset[3:2]+31:32*offset[3:2]];
+wire [3:0] which;
+decoder_2_4 dec(
+    .in(offset[3:2]),
+    .out(which)
+);
+assign out = in[31:0] & {32{which[0]}}  |
+             in[63:32] & {32{which[1]}} |
+             in[95:64] & {32{which[2]}} |
+             in[127:96] & {32{which[3]}};
 endmodule

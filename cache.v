@@ -6,8 +6,8 @@ module cache (
     //cpu interface
     input                   valid,
     input                   op,//1 for write, 0 for read
-    input                   index,
-    input                   tag,
+    input [`INDEXLEN-1:0]   index,
+    input [`TAGLEN-1:0]     tag,
     input [`OFFSETLEN-1:0]  offset,
     input [3:0]             wstrb,
     input [31:0]            wdata,
@@ -21,13 +21,13 @@ module cache (
     output [31:0]           rd_addr,
     input                   rd_rdy,
     input                   ret_valid,
-    input  [1:0]            ret_last,
+    input                   ret_last,
     input  [31:0]           ret_data,
     output                  wr_req,    
     output [2:0]            wr_type,
     output [31:0]           wr_addr,
     output [3:0]            wr_wstrb,// only when wr_type is 010 or 001 or 000 make sense
-    output [`WIDTH*8-1:0]    wr_wdata,
+    output [`WIDTH*8-1:0]   wr_data,
     input                   wr_rdy
 );
 wire reset = ~resetn;
@@ -69,6 +69,8 @@ reg  [`WIDTH*8-1:0]  wdata_reg;
 wire [`TAGVLEN-1:0]              tagvrd[1:0];
 reg  [`TAGVLEN-1:0]              tagv_reg[1:0];
 wire [`TAGVLEN-1:0]              tagv[1:0];
+assign tagv[0] = LOOKUP ? tagvrd[0] : tagv_reg[0];
+assign tagv[1] = LOOKUP ? tagvrd[1] : tagv_reg[1];
 
 wire [`WIDTH*8-1:0]              datard[1:0];
 reg  [32-1:0]                   datard_reg[`WIDTH/4-1:0];
@@ -114,21 +116,21 @@ HitGen hitgen(
 //wr
 wire missrd_ok;
 wire misswr_ok;
-assign wr_wdata = datawr_reg;
+assign wr_data = datawr_reg;
 assign wr_wstrb = 4'b0000;// 一直都是写cache行，因此不需要wstrb
 assign wr_type  = 3'b100;
-assign wr_addr  = {Tag, Idx, 4'b0};
+assign wr_addr  = {tagv[hitway][`TAGR], Idx, 4'b0};
 assign misswr_ok = wr_req;
 assign wr_req = miss_wring&&wr_rdy;
 //rd
 assign rd_type = 3'b100;
 assign rd_addr = {Tag, Idx, 4'b0};
-reg [$clog2(`WIDTH/4):0] cnt;
+reg [$clog2(`WIDTH/4)-1:0] cnt;
 always @(posedge clk) begin
     if(reset)
-        cnt <= 0;
-    else if(ret_valid||ret_last!=0)
-        cnt <= cnt+1;
+        cnt <= 2'b00;
+    else if(ret_valid||ret_last)
+        cnt <= cnt+2'b01;
 end
 always @(posedge clk) begin
     if(ret_valid)
@@ -136,7 +138,7 @@ always @(posedge clk) begin
 end
 genvar i;
 generate for(i=0;i<`WIDTH/4;i=i+1)begin:gendgenerate
-    assign datard_combined[i*32-1:i] = datard_reg[i];
+    assign datard_combined[i*32+31:i*32] = datard_reg[i];
 end
 endgenerate
 MissRdState missrdstate(
@@ -149,7 +151,7 @@ MissRdState missrdstate(
     .ret_valid(ret_valid),
     .ret_last(ret_last)
 );
-wire error_rd = !MISS&&cnt!=0||ret_last!=0&&cnt!=2'b11;
+wire error_rd = !MISS&&cnt!=2'b00||ret_last&&cnt!=2'b11;
 
 wire error_miss = !MISS&&(miss_rding||miss_wring||missrd_ok||misswr_ok);
 //REPLACE
@@ -166,7 +168,6 @@ Fetch_128_32 fetch_128_32_inst(
 always @(posedge clk) begin
     if(IDLE&&in_valid)begin
         pa_reg <= pa_from_tlb;
-
         wr_reg <= in_op;
         wstrb_reg <= Wstrb;
         wdata_reg <= wdata_extended;
@@ -181,16 +182,16 @@ always @(posedge clk) begin
     end
     else if(MISS)begin
         if(missrd_ok)
-            miss_rding <= 0;
+            miss_rding <= 1'b0;
         if(misswr_ok)
-            miss_wring <= 0;
+            miss_wring <= 1'b0;
     end
     else if(REPLACE)begin
         tagv_reg[hitway] <= {Tag, 1'b1};
-        replace <= 1;
+        replace <= 1'b1;
     end
     else if(REFILL)begin
-        replace <= 0;
+        replace <= 1'b0;
     end
 end
 
@@ -209,7 +210,6 @@ always @(posedge clk) begin
 end
 
 TagVWrapper tagvwrapper(
-    .reset(reset),
     .clk(clk),
     .en(IDLE&&in_valid||REPLACE),
     .idx(Idx),
@@ -220,13 +220,12 @@ TagVWrapper tagvwrapper(
     .Tag(Tag)
 );
 DataWrapper datawrapper(
-    .reset(reset),
     .clk(clk),
     .en(IDLE&&in_valid||REPLACE||REFILL&&wr_reg),
     .idx(Idx),
     .wr(REPLACE||REFILL&&wr_reg),
     .wr_way(hitway),
-    .wstrb(REPLACE? 16'b1 :wstrb_reg),
+    .wstrb(REPLACE? 16'hffff :wstrb_reg),
     .wdata(REPLACE? datard_combined :wdata_reg),
     .rd1(datard[0]),
     .rd2(datard[1])
