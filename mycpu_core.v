@@ -17,6 +17,7 @@ module mycpu_core
     input  wire        inst_sram_addr_ok,
     input  wire        inst_sram_data_ok,         
     input  wire [31:0] inst_sram_rdata,
+    output wire        if_icache_uncache,  // added for uncache
 
     // data sram interface
     output wire        data_sram_req,
@@ -28,12 +29,18 @@ module mycpu_core
     input  wire        data_sram_addr_ok,
     input  wire        data_sram_data_ok, 
     input  wire [31:0] data_sram_rdata,
+    output wire        if_dcache_uncache,    // added for uncache
 
     // trace debug interface
     output wire [31:0] debug_wb_pc,
     output wire [ 3:0] debug_wb_rf_we,
     output wire [ 4:0] debug_wb_rf_wnum,
-    output wire [31:0] debug_wb_rf_wdata
+    output wire [31:0] debug_wb_rf_wdata,
+
+    // ICACHE interface
+    output wire [31:0] inst_virtual_addr,
+    // DCACHE interface
+    output wire [31:0] data_virtual_addr
 );
 wire reset = ~resetn;
 
@@ -442,6 +449,10 @@ wire [31:0] tlb_reflush_pc;
 reg tlb_refetch_EX, tlb_refetch_MEM, tlb_refetch_WB;
 wire tlb_refetch_tlb_inst_ID, tlb_refetch_csr_inst_ID;
 
+// exp21
+reg         inst_buf_valid;  // 判断指令缓存是否有效
+reg         inst_sram_addr_ack; // 判断指令缓存地址是否已被接受
+
 
 //新的添加的通路声明放这里
 //--  inst decode for ID
@@ -637,6 +648,9 @@ assign addr_ex_physical = ex_trans_direct ? addr_ex_direct
 
 assign  mem_wdata_ID = rkd_value;
 
+// exp22
+assign data_virtual_addr = addr_ex_direct; // 传给总线的数据虚拟地址
+
 //* Mem instrs
 wire mem_byte, mem_half, mem_word, mem_signed;
 assign mem_byte = inst_ld_b | inst_st_b | inst_ld_bu;
@@ -743,6 +757,8 @@ end
 // --exp19
 
 
+// exp21
+assign inst_virtual_addr = pc_direct; // 传给总线的指令虚拟地址
 
 wire [31:0]                 pc_direct; // 直接地址翻译
 wire [31:0]                 pc_dmw0, nextpc_dmw1; // 直接映射窗口地址翻译

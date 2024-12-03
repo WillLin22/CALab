@@ -11,6 +11,8 @@ module cache (
     input [`OFFSETLEN-1:0]  offset,
     input [3:0]             wstrb,
     input [31:0]            wdata,
+    // added for uncache
+    input                   uncache, // 是否为非缓存访问
 
     output                  addr_ok,
     output                  data_ok,
