@@ -81,6 +81,7 @@ module HitGen (
     input [`TAGVLEN-1:0] tagv1,
     input [`TAGVLEN-1:0] tagv2,
     input [`TAGLEN-1:0] Tag,
+    input uncache,
     input en_for_miss,// set for 1 cycle each nothit, connect with REPLACE
     output hit,
     output [$clog2(`WAY)-1:0] way,
@@ -96,7 +97,7 @@ generate for(i = 0;i < `WAY; i=i+1) begin : hitway_gen
     assign hitway[i] = tagv[i][`TAGR] == Tag && tagv[i][`VR] == 1;
 end
 endgenerate
-assign hit = |hitway;
+assign hit = (|hitway)&&!uncache;
 encoder_2_1 enc1(
     .in(hitway),
     .out(way_e),
@@ -192,6 +193,7 @@ endmodule
 module Fetch_128_32 (
     input [3:0] offset,
     input [127:0] in,
+    input uncache,
     output [31:0] out
 );
 wire [3:0] which;
@@ -199,8 +201,10 @@ decoder_2_4 dec(
     .in(offset[3:2]),
     .out(which)
 );
-assign out = in[31:0] & {32{which[0]}}  |
+wire [31:0] out_cache = in[31:0] & {32{which[0]}}  |
              in[63:32] & {32{which[1]}} |
              in[95:64] & {32{which[2]}} |
              in[127:96] & {32{which[3]}};
+wire [31:0] out_uncache = in[31:0];
+assign out = uncache ? out_uncache : out_cache;
 endmodule

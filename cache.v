@@ -80,6 +80,9 @@ wire [`WIDTH*8-1:0]              datard_combined;
 reg  [`WIDTH*8-1:0]              datawr_reg;
 
 wire                            Drd[1:0];
+// uncache
+reg                             uncache_reg;
+reg  [3:0]                      wstrb32_reg;
 
 // wr state control reg / rd state control reg
 reg miss_rding;
@@ -110,7 +113,8 @@ HitGen hitgen(
     .tagv1(tagv[0]),
     .tagv2(tagv[1]),
     .Tag(Tag),
-    .en_for_miss(REPLACE),
+    .uncache(uncache_reg),
+    .en_for_miss((REPLACE)&&!uncache_reg),
     .hit(hit),
     .way(hitway),
     .error(hiterror)
@@ -120,19 +124,19 @@ HitGen hitgen(
 wire missrd_ok;
 wire misswr_ok;
 assign wr_data = datawr_reg;
-assign wr_wstrb = 4'b0000;// 一直都是写cache行，因此不需要wstrb
-assign wr_type  = 3'b100;
-assign wr_addr  = {tagv[hitway][`TAGR], Idx, 4'b0};
+assign wr_wstrb = wstrb32_reg;
+assign wr_type  = uncache_reg?3'b010:3'b100;
+assign wr_addr  = uncache_reg?{Tag, Idx, Offset[3:2], 2'b0}:{tagv[hitway][`TAGR], Idx, 4'b0};
 assign misswr_ok = wr_req;
 assign wr_req = miss_wring&&wr_rdy;
 //rd
-assign rd_type = 3'b100;
-assign rd_addr = {Tag, Idx, 4'b0};
+assign rd_type = uncache_reg?3'b010:3'b100;
+assign rd_addr = uncache_reg?{Tag, Idx, Offset[3:2], 2'b0}:{Tag, Idx, 4'b0};
 reg [$clog2(`WIDTH/4)-1:0] cnt;
 always @(posedge clk) begin
     if(reset)
         cnt <= 2'b00;
-    else if(ret_valid||ret_last)
+    else if((ret_valid||ret_last)&&!uncache_reg)
         cnt <= cnt+2'b01;
 end
 always @(posedge clk) begin
@@ -154,16 +158,17 @@ MissRdState missrdstate(
     .ret_valid(ret_valid),
     .ret_last(ret_last)
 );
-wire error_rd = !MISS&&cnt!=2'b00||ret_last&&cnt!=2'b11;
+wire error_rd = !MISS&&cnt!=2'b00||(ret_last&&cnt!=2'b11&&!uncache_reg);
 
 wire error_miss = !MISS&&(miss_rding||miss_wring||missrd_ok||misswr_ok);
 //REPLACE
 reg replace;// 1 for have been missed, 0 for not
 //REFILL
 assign out_dataok = REFILL;
-wire error_refill = REFILL&&!hit;
+wire error_refill = REFILL&&!hit&&!uncache_reg;
 Fetch_128_32 fetch_128_32_inst(
     .offset(Offset),
+    .uncache(uncache_reg),
     .in(replace? datard_combined :datawr_reg),
     .out(out_rdata)
 );
@@ -174,14 +179,15 @@ always @(posedge clk) begin
         wr_reg <= in_op;
         wstrb_reg <= Wstrb;
         wdata_reg <= wdata_extended;
-
+        uncache_reg <= uncache;
+        wstrb32_reg <= in_wstrb;
     end
     else if(LOOKUP)begin
         tagv_reg[0] <= tagvrd[0];
         tagv_reg[1] <= tagvrd[1];
         datawr_reg  <= datard[hitway];
-        miss_rding  <= !hit;
-        miss_wring  <= !hit&&Drd[hitway];
+        miss_rding  <= !hit&&!uncache_reg || uncache_reg&&!wr_reg;
+        miss_wring  <= !hit&&Drd[hitway]&&!uncache_reg || uncache_reg&&wr_reg;
     end
     else if(MISS)begin
         if(missrd_ok)
@@ -214,7 +220,7 @@ end
 
 TagVWrapper tagvwrapper(
     .clk(clk),
-    .en(IDLE&&in_valid||REPLACE),
+    .en((IDLE&&in_valid||REPLACE)&&!uncache_reg),
     .idx(Idx),
     .tagvr1(tagvrd[0]),
     .tagvr2(tagvrd[1]),
@@ -224,7 +230,7 @@ TagVWrapper tagvwrapper(
 );
 DataWrapper datawrapper(
     .clk(clk),
-    .en(IDLE&&in_valid||REPLACE||REFILL&&wr_reg),
+    .en((IDLE&&in_valid||REPLACE||REFILL&&wr_reg)&&!uncache_reg),
     .idx(Idx),
     .wr(REPLACE||REFILL&&wr_reg),
     .wr_way(hitway),
@@ -235,7 +241,7 @@ DataWrapper datawrapper(
 );
 DWrapper dwrapper(
     .clk(clk),
-    .en(IDLE&&in_valid||REPLACE||REFILL&&wr_reg),
+    .en((IDLE&&in_valid||REPLACE||REFILL&&wr_reg)&&!uncache_reg),
     .wr(REPLACE||REFILL&&wr_reg),
     .wr_way(hitway),
     .idx(Idx),
