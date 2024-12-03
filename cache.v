@@ -12,7 +12,7 @@ module cache (
     input [3:0]             wstrb,
     input [31:0]            wdata,
     // added for uncache
-    input                   uncache, // 是否为非缓存访问
+    input                   uncache, // 是否为非缓存访问，拉高表示强序非缓存
 
     output                  addr_ok,
     output                  data_ok,
