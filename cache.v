@@ -148,6 +148,7 @@ generate for(i=0;i<`WIDTH/4;i=i+1)begin:gendgenerate
     assign datard_combined[i*32+31:i*32] = datard_reg[i];
 end
 endgenerate
+wire error_rdstate;
 MissRdState missrdstate(
     .reset(reset),
     .clk(clk),
@@ -156,9 +157,10 @@ MissRdState missrdstate(
     .rd_req(rd_req),
     .rd_ok(missrd_ok),
     .ret_valid(ret_valid),
-    .ret_last(ret_last)
+    .ret_last(ret_last),
+    .error(error_rdstate)
 );
-wire error_rd = !MISS&&cnt!=2'b00||(ret_last&&cnt!=2'b11&&!uncache_reg);
+wire error_rd = !MISS&&cnt!=2'b00||(ret_last&&cnt!=2'b11&&!uncache_reg)||error_rdstate;
 
 wire error_miss = !MISS&&(miss_rding||miss_wring||missrd_ok||misswr_ok);
 //REPLACE

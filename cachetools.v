@@ -172,7 +172,8 @@ module MissRdState (
     output rd_req,
     output rd_ok,
     input ret_valid,
-    input ret_last
+    input ret_last,
+    input error
 );
 reg [2:0] state;
 always @(posedge clk)begin
@@ -188,6 +189,7 @@ always @(posedge clk)begin
 end
 assign rd_req = state[1] && rd_rdy;
 assign rd_ok = ret_last;
+assign error = !state[2] && ret_last || !ret_valid && ret_last;
     
 endmodule
 module Fetch_128_32 (
