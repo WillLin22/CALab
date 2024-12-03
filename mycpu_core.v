@@ -17,6 +17,7 @@ module mycpu_core
     input  wire        inst_sram_addr_ok,
     input  wire        inst_sram_data_ok,         
     input  wire [31:0] inst_sram_rdata,
+    output wire        if_icache_uncache,  // added for uncache
 
     // data sram interface
     output wire        data_sram_req,
@@ -28,6 +29,7 @@ module mycpu_core
     input  wire        data_sram_addr_ok,
     input  wire        data_sram_data_ok, 
     input  wire [31:0] data_sram_rdata,
+    output wire        if_dcache_uncache,    // added for uncache
 
     // trace debug interface
     output wire [31:0] debug_wb_pc,

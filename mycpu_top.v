@@ -77,6 +77,7 @@ module mycpu_top(
     wire [31:0] data_sram_rdata;
 
     //icache read channel
+    wire        if_icache_uncache;
     wire [31:0] inst_virtual_addr;
     wire        icache_addr_ok;
     wire        icache_data_ok;
@@ -98,6 +99,7 @@ module mycpu_top(
     wire        icache_wr_rdy=1'b0;     
 
     //dcache read channel
+    wire        if_dcache_uncache;
     wire [31:0] data_virtual_addr;
     wire        dcache_addr_ok;
     wire        dcache_data_ok;
@@ -132,6 +134,7 @@ module mycpu_top(
         .inst_sram_addr_ok  (icache_addr_ok),   // exp21 修改，考虑icache是否传给cpu它的addr_ok
         .inst_sram_data_ok  (icache_data_ok),   // exp21 修改，考虑icache是否传给cpu它的data_ok
         .inst_sram_rdata    (icache_rdata),     // exp21 修改，输入给cpu处理的指令是icache的rdata
+        .if_icache_uncache  (if_icache_uncache),
 
         // data sram interface
         .data_sram_req      (data_sram_req),
@@ -143,6 +146,7 @@ module mycpu_top(
         .data_sram_addr_ok  (dcache_addr_ok),   // exp22 修改，考虑dcache是否传给cpu它的addr_ok
         .data_sram_data_ok  (dcache_data_ok),   // exp22 修改，考虑dcache是否传给cpu它的data_ok
         .data_sram_rdata    (dcache_rdata),     // exp22 修改，输入给cpu处理的数据是dcache的rdata
+        .if_dcache_uncache  (if_dcache_uncache),
 
         // trace debug interface
         .debug_wb_pc        (debug_wb_pc),
@@ -232,6 +236,7 @@ module mycpu_top(
         .offset             (inst_virtual_addr[3:0]),
         .wstrb              (inst_sram_wstrb),
         .wdata              (inst_sram_wdata),
+        .uncache            (if_icache_uncache),       
 
         .addr_ok            (icache_addr_ok),       //output 阻塞流水线的指令
         .data_ok            (icache_data_ok),       //output
@@ -264,6 +269,7 @@ module mycpu_top(
         .offset             (data_virtual_addr[3:0]),
         .wstrb              (data_sram_wstrb),
         .wdata              (data_sram_wdata),
+        .uncache            (if_dcache_uncache),                 
 
         .addr_ok            (dcache_addr_ok),       //output 阻塞流水线的指令
         .data_ok            (dcache_data_ok),       //output
