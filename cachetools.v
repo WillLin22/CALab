@@ -7,8 +7,9 @@ module CacheIdxGen (
     input clk,
     input en,
     input [`INDEXLEN-1:0]   idx,
-    output reg [`INDEX-1:0] way
+    output gen
 );
+reg [`INDEX-1:0] way;
 always @(posedge clk) begin
     if (reset) begin
         way <= 0;
@@ -16,9 +17,9 @@ always @(posedge clk) begin
         way[idx] <= way[idx] ^1'b1;
     end
 end
+assign gen = way[idx];
 endmodule
 module DWrapper (
-    input reset,
     input clk,
     input en,
     input wr, // 1 for wr, 0 for rd
@@ -76,6 +77,7 @@ endmodule
 module HitGen (
     input reset,
     input clk,
+    input [`INDEXLEN-1:0] idx,
     input [`TAGVLEN-1:0] tagv1,
     input [`TAGVLEN-1:0] tagv2,
     input [`TAGLEN-1:0] Tag,
@@ -105,7 +107,8 @@ CacheIdxGen idxgen(
     .reset(reset),
     .clk(clk),
     .en(en_for_miss),
-    .way(way_gen)
+    .idx(idx),
+    .gen(way_gen)
 ); 
 assign way = hit ? way_e : way_gen;
 endmodule

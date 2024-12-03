@@ -104,6 +104,7 @@ wire hiterror;
 HitGen hitgen(
     .reset(reset),
     .clk(clk),
+    .idx(Idx),
     .tagv1(tagv[0]),
     .tagv2(tagv[1]),
     .Tag(Tag),
@@ -231,7 +232,6 @@ DataWrapper datawrapper(
     .rd2(datard[1])
 );
 DWrapper dwrapper(
-    .reset(reset),
     .clk(clk),
     .en(IDLE&&in_valid||REPLACE||REFILL&&wr_reg),
     .wr(REPLACE||REFILL&&wr_reg),
