@@ -426,7 +426,7 @@ module cpu_bridge_axi(
             dcache_wr_data_reg <= 128'b0;
         end                                        // @RICKY 请重点检查！！！！！！！！！！！
         else if (w_current_state == W_IDLE) begin // 写请求状态机为空闲状态，更新数据到写缓存中
-            dcache_wr_strb_reg <= dcache_wr_strb;
+            dcache_wr_strb_reg <= dcache_wr_wstrb;
             dcache_wr_data_reg <= dcache_wr_data;
         end
         else if (w_current_state != W_IDLE) begin // 只要不为空闲状态，就慢慢以 Burst 方式发送数据
@@ -506,8 +506,8 @@ module cpu_bridge_axi(
     //assign data_sram_addr_ok = (arid[0] && arvalid && arready) | (wid[0] && awvalid && awready);
     //assign inst_sram_data_ok = (~rid_reg[0] && (r_current_state == R_DATA_END)) | (~bid[0] && bvalid && bready);
     //assign data_sram_data_ok = (rid_reg[0] && (r_current_state == R_DATA_END)) | (bid[0] && bvalid && bready);
-    assign icache_rd_rdy = ~arid[0] && arvalid && arready;
-    assign dcache_rd_rdy = (arid[0] && arvalid && arready) | (wid[0] && awvalid && awready);
+    assign icache_rd_rdy = ar_current_state==AR_IDLE; 
+    assign dcache_rd_rdy = ar_current_state==AR_IDLE;
     assign icache_ret_data = icache_rdata_buffer;
     assign dcache_ret_data = dcache_rdata_buffer;
     assign icache_ret_valid = ~rid_reg[0] && (r_current_state == R_DATA_END || r_current_state == R_DATA_START)  ; // 返回icache数据有效信号
