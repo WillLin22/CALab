@@ -65,7 +65,7 @@ wire [`TAGLEN-1:0]               Tag;
 wire hit;
 wire hitway;
 
-wire [31:0] pa_from_tlb = {in_tag, Idx, 4'b0};
+wire [31:0] pa_from_tlb = {in_tag, Idx, in_offset};
 reg  [31:0] pa_reg;
 
 reg  wr_reg;
