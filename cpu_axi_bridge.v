@@ -476,25 +476,15 @@ module cpu_bridge_axi(
     assign bready = (w_current_state == W_REQ_END); // 主方准备好接收写响应，等待从方发送代表写请求响应有效的 bvalid 信号。
 
     /* --------------------- 传给cpu（rdata 缓冲区）------------------------*/
-    reg [31:0] icache_rdata_buffer; // 用于缓存icache读出的数据，以便传给CPU
-    reg [31:0] dcache_rdata_buffer; // 用于缓存dcache读出的数据，以便传给CPU
     reg [3:0] rid_reg;
 
     always @(posedge aclk) begin
         if (areset) begin
-            icache_rdata_buffer <= 32'b0;
-            dcache_rdata_buffer <= 32'b0;
             //inst_sram_rdata_reg <= 32'b0;
             //data_sram_rdata_reg <= 32'b0;
             rid_reg <= 4'b0;
         end
         else if (rvalid && rready) begin
-            if (rid[0]) begin // 读请求来自数据RAM
-                dcache_rdata_buffer <= rdata;
-            end
-            else begin // 读请求来自指令RAM
-                icache_rdata_buffer <= rdata;
-            end
             //inst_sram_rdata_reg <= rdata & {32{~rid[0]}}; // 读请求读出的数据
             //data_sram_rdata_reg <= rdata & {32{rid[0]}};
             rid_reg <= rid;
@@ -510,12 +500,12 @@ module cpu_bridge_axi(
     //assign data_sram_data_ok = (rid_reg[0] && (r_current_state == R_DATA_END)) | (bid[0] && bvalid && bready);
     assign icache_rd_rdy = ar_current_state==AR_IDLE; 
     assign dcache_rd_rdy = ar_current_state==AR_IDLE;
-    assign icache_ret_data = icache_rdata_buffer;
-    assign dcache_ret_data = dcache_rdata_buffer;
+    assign icache_ret_data = rdata;
+    assign dcache_ret_data = rdata;
     assign icache_ret_valid = ~rid_reg[0] && (r_current_state == R_DATA_END || r_current_state == R_DATA_START)  ; // 返回icache数据有效信号
-    assign dcache_ret_valid = rid_reg[0] && (r_current_state == R_DATA_END || r_current_state == R_DATA_START); // 返回dcache数据有效信号
-    assign icache_ret_last = ~rid_reg[0] && (r_current_state == R_DATA_END); // 返回icache数据结束信号
-    assign dcache_ret_last = rid_reg[0] && (r_current_state == R_DATA_END); // 返回dcache数据结束信号
+    assign dcache_ret_valid = rid_reg[0] && (rvalid); // 返回dcache数据有效信号
+    assign icache_ret_last = ~rid_reg[0] && (rlast); // 返回icache数据结束信号
+    assign dcache_ret_last = rid_reg[0] && (rlast); // 返回dcache数据结束信号
     assign dcache_wr_rdy = (w_current_state == W_IDLE); // 当前没有写请求则可以接收数据RAM的写请求
 
 endmodule
