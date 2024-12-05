@@ -220,7 +220,7 @@ module mycpu_top(
         .dcache_wr_req      (dcache_wr_req),
         .dcache_wr_type     (dcache_wr_type),
         .dcache_wr_addr     (dcache_wr_addr),
-        .dcache_wr_wstrb    (dcache_wr_wstrb),
+        .dcache_wr_wstrb    (dcache_wr_strb),
         .dcache_wr_data     (dcache_wr_data),
         .dcache_wr_rdy      (dcache_wr_rdy)
     );

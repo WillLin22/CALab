@@ -764,7 +764,7 @@ end
 assign inst_virtual_addr = pc_direct; // 传给总线的指令虚拟地址
 
 wire [31:0]                 pc_direct; // 直接地址翻译
-wire [31:0]                 pc_dmw0, nextpc_dmw1; // 直接映射窗口地址翻译
+wire [31:0]                 pc_dmw0; // 直接映射窗口地址翻译
 wire [31:0]                 pc_tlb;    // tlb地址翻译
 wire [31:0]                 pc_physical; // 物理地址
 assign pc_direct = pc;

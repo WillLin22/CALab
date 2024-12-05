@@ -37,6 +37,11 @@ module cache (
     input  [1:0]            code_4_3 // 0:指定cache行tag置0  1:指定cache行无效并写回（如D=1） 2： 取
 );
 wire reset = ~resetn;
+
+reg[`INDEXLEN-1:0] index_reg;
+reg[`TAGLEN-1:0] tag_reg;
+reg[`OFFSETLEN-1:0] offset_reg;
+
 //Cache and cpu/tlb interface
 wire                        in_valid = valid;// enable
 wire                        in_op = op;//1 for write, 0 for read
@@ -48,9 +53,9 @@ wire [31:0]                 out_rdata;
 assign addr_ok = out_addrok;
 assign data_ok = out_dataok;
 assign rdata = out_rdata;
-wire [`INDEXLEN-1:0]        in_idx = index;
-wire [`OFFSETLEN-1:0]       in_offset = offset;
-wire [`TAGLEN-1:0]          in_tag = tag;
+wire [`INDEXLEN-1:0]        in_idx =in_valid?index: index_reg;
+wire [`OFFSETLEN-1:0]       in_offset =in_valid?offset: offset_reg;
+wire [`TAGLEN-1:0]          in_tag =in_valid?tag: tag_reg;
 
 reg [4:0] state;// refill miss lookup idle
 wire IDLE = state == 5'b00001;
@@ -187,6 +192,9 @@ always @(posedge clk) begin
         wdata_reg <= wdata_extended;
         uncache_reg <= uncache;
         wstrb32_reg <= in_wstrb;
+        index_reg <= index;
+        tag_reg <= tag;
+        offset_reg <= offset;
     end
     else if(LOOKUP)begin
         tagv_reg[0] <= tagvrd[0];

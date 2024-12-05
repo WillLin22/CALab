@@ -242,13 +242,13 @@ module cpu_bridge_axi(
                 end
             end
             W_REQ_START: begin
-                if((awvalid && awready && wvalid && wready) || ((|aw_wait_resp_cnt) && (|wd_wait_resp_cnt))) begin // 写请求地址和写请求数据同时握手 或者 写请求地址和写请求数据都存在已发送但是未收到响应的情况，则进入写请求结束状态
+                if((awvalid && awready && wvalid && wready && wlast) || ((|aw_wait_resp_cnt) && (|wd_wait_resp_cnt))) begin // 写请求地址和写请求数据同时握手 或者 写请求地址和写请求数据都存在已发送但是未收到响应的情况，则进入写请求结束状态
                     w_next_state = W_REQ_END;
                 end
                 else if ((awvalid && awready) || (|aw_wait_resp_cnt)) begin // 写请求地址握手 或者 存在写请求地址发送但未收到响应的情况（且没有写数据需要处理），则进入写请求地址响应状态
                     w_next_state = W_ADDR_RESP;
                 end
-                else if ((wvalid && wready) || (|wd_wait_resp_cnt)) begin // 写请求数据握手 或者 存在写请求数据发送但是未收到响应的情况（且没有写请求地址需要处理），则进入写请求数据响应状态
+                else if ((wvalid && wready && wlast) || (|wd_wait_resp_cnt)) begin // 写请求数据握手 或者 存在写请求数据发送但是未收到响应的情况（且没有写请求地址需要处理），则进入写请求数据响应状态
                     w_next_state = W_DATA_RESP;
                 end
                 else begin
@@ -256,7 +256,7 @@ module cpu_bridge_axi(
                 end
             end
             W_ADDR_RESP: begin
-                if(wvalid && wready) begin // 写请求数据握手
+                if(wvalid && wready && wlast) begin // 写请求数据握手
                     w_next_state = W_REQ_END;
                 end
                 else begin
@@ -328,8 +328,11 @@ module cpu_bridge_axi(
 		if(~aresetn) begin
 			wburst_cnt <= 2'b0;
         end
-		else if(bvalid & bready) begin	// 握手成功
-			wburst_cnt <= wburst_cnt + 1'b1;
+        else if(awvalid & awready) begin	// 握手成功
+			wburst_cnt <= awlen;
+        end
+		else if(wvalid & wready) begin	// 握手成功
+			wburst_cnt <= wburst_cnt - 1'b1;
         end
 	end
 
@@ -413,31 +416,30 @@ module cpu_bridge_axi(
     /* --------------------- 写数据处理 ------------------------*/
     /*对于写操作，Cache 模块在一个周期内直接将一个 Cache 行的数据传给 AXI 总线接口模块，AXI
     总线接口模块内部设一个 16 字节的写缓存保存这些数，然后再慢慢地以 Burst 方式发出去。*/
-    reg [31:0] wdata_reg;
     reg [3:0]  wstrb_reg;
     reg [3:0]  dcache_wr_strb_reg;
     reg [127:0] dcache_wr_data_reg;
 
     always @(posedge aclk) begin
         if (areset) begin
-            wdata_reg <= 32'b0;
             wstrb_reg <= 4'b0;
             dcache_wr_strb_reg <= 4'b0;
             dcache_wr_data_reg <= 128'b0;
         end                                        // @RICKY 请重点检查！！！！！！！！！！！
         else if (w_current_state == W_IDLE) begin // 写请求状态机为空闲状态，更新数据到写缓存中
-            dcache_wr_strb_reg <= dcache_wr_strb;
+            wstrb_reg <= dcache_wr_wstrb;
+            dcache_wr_strb_reg <= dcache_wr_wstrb;
             dcache_wr_data_reg <= dcache_wr_data;
         end
-        else if (w_current_state != W_IDLE) begin // 只要不为空闲状态，就慢慢以 Burst 方式发送数据
-            wdata_reg <= dcache_wr_data_reg[31:0];
+        else if (wvalid && wready) begin // 只要不为空闲状态，就慢慢以 Burst 方式发送数据
+            dcache_wr_data_reg[95:0] <= dcache_wr_data_reg[127:32];
         end
     end
 
     assign wid      = 4'b1;
-    assign wdata    = wdata_reg;
+    assign wdata    = dcache_wr_data_reg[31:0];
     assign wstrb    = wstrb_reg;
-    assign wlast    = &wburst_cnt;
+    assign wlast    = ~|wburst_cnt;
     assign wvalid   = (w_current_state == W_REQ_START) | (w_current_state == W_ADDR_RESP); // 主方写请求数据有效，等待从方发送代表准备好接收数据传输的 wready 信号
 
     /* --------------------- 写响应处理 ------------------------*/
@@ -460,10 +462,10 @@ module cpu_bridge_axi(
 		if(areset) begin
 			wd_wait_resp_cnt <= 2'b0;
 		end
-        else if(wvalid && wready && bvalid && bready) begin
+        else if(wvalid && wready && wlast && bvalid && bready) begin
             wd_wait_resp_cnt <= wd_wait_resp_cnt;
         end
-		else if(wvalid && wready) begin // 写请求数据握手，计数器加一
+		else if(wvalid && wready && wlast) begin // 写请求数据握手，计数器加一
 			wd_wait_resp_cnt <= wd_wait_resp_cnt + 1'b1;
         end
 		else if(bvalid && bready) begin // 写响应握手，计数器减一
@@ -506,8 +508,8 @@ module cpu_bridge_axi(
     //assign data_sram_addr_ok = (arid[0] && arvalid && arready) | (wid[0] && awvalid && awready);
     //assign inst_sram_data_ok = (~rid_reg[0] && (r_current_state == R_DATA_END)) | (~bid[0] && bvalid && bready);
     //assign data_sram_data_ok = (rid_reg[0] && (r_current_state == R_DATA_END)) | (bid[0] && bvalid && bready);
-    assign icache_rd_rdy = ~arid[0] && arvalid && arready;
-    assign dcache_rd_rdy = (arid[0] && arvalid && arready) | (wid[0] && awvalid && awready);
+    assign icache_rd_rdy = ar_current_state==AR_IDLE; 
+    assign dcache_rd_rdy = ar_current_state==AR_IDLE;
     assign icache_ret_data = icache_rdata_buffer;
     assign dcache_ret_data = dcache_rdata_buffer;
     assign icache_ret_valid = ~rid_reg[0] && (r_current_state == R_DATA_END || r_current_state == R_DATA_START)  ; // 返回icache数据有效信号
