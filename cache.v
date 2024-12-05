@@ -127,7 +127,7 @@ HitGen hitgen(
 //wr
 wire missrd_ok;
 wire misswr_ok;
-assign wr_data = datawr_reg;
+assign wr_data = uncache_reg ? datawr_reg: wdata_reg;
 assign wr_wstrb = wstrb32_reg;
 assign wr_type  = uncache_reg?3'b010:3'b100;
 assign wr_addr  = uncache_reg?{Tag, Idx, Offset[3:2], 2'b0}:{tagv[hitway][`TAGR], Idx, 4'b0};
