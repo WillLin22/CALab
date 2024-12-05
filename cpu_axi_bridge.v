@@ -125,16 +125,17 @@ module cpu_bridge_axi(
     wire areset;
     assign areset = ~aresetn;
 
-    wire rd_inst_req;
-    wire wr_inst_req;
-    wire rd_data_req;
-    wire wr_data_req;
+/* --- withour cache */
+    //wire rd_inst_req;
+    //wire wr_inst_req;
+    //wire rd_data_req;
+    //wire wr_data_req;
 
     // wr --> 0读 ; 1写
-    assign rd_inst_req = inst_sram_req && ~inst_sram_wr;      
-    assign wr_inst_req = inst_sram_req && inst_sram_wr;
-    assign rd_data_req = data_sram_req && ~data_sram_wr;
-    assign wr_data_req = data_sram_req && data_sram_wr;
+    //assign rd_inst_req = inst_sram_req && ~inst_sram_wr;      
+    //assign wr_inst_req = inst_sram_req && inst_sram_wr;
+    //assign rd_data_req = data_sram_req && ~data_sram_wr;
+    //assign wr_data_req = data_sram_req && data_sram_wr;
 
     // 写数据burst传输计数器
 	reg [1:0] wburst_cnt;	// 最多传输4次，即3'b100，只需两位是因为最后一次累加恰好进位溢出，等价于置零
@@ -154,7 +155,7 @@ module cpu_bridge_axi(
                 if(areset | read_block) begin 
                     ar_next_state = AR_IDLE;
                 end
-                else if(rd_inst_req | rd_data_req) begin // 如果有读数据/读地址请求，则进入读请求状态
+                else if(icache_rd_req | dcache_rd_req) begin // 如果有读数据/读地址请求，则进入读请求状态
                     ar_next_state = AR_REQ_START;
                 end
                 else begin
@@ -232,7 +233,8 @@ module cpu_bridge_axi(
                 if(areset) begin
                     w_next_state = W_IDLE;
                 end
-                else if(wr_data_req | wr_inst_req) begin // 有写请求，则进入写请求开始状态
+                //else if(wr_data_req | wr_inst_req) begin // 有写请求，则进入写请求开始状态
+                else if(dcache_wr_req) begin // 有写请求，则进入写请求开始状态
                     w_next_state = W_REQ_START;
                 end
                 else begin
@@ -346,7 +348,7 @@ module cpu_bridge_axi(
         end
         else if (ar_current_state == AR_IDLE) begin // 读请求状态机为空闲状态，更新数据
             arid_reg <= {3'b0, dcache_rd_req}; // 数据RAM请求优先于指令RAM
-            araddr_reg <= dcache_rd_req ? dacache_rd_addr : icache_rd_addr;
+            araddr_reg <= dcache_rd_req ? dcache_rd_addr : icache_rd_addr;
             // arsize_reg <= rd_data_req ? {1'b0, data_sram_size}  : {1'b0, inst_sram_size};
             arlen_reg <= dcache_rd_req ? {(2){dcache_rd_type[2]}}  : {(2){icache_rd_type[2]}}; // rd_typ：3’b000——字节，3’b001——半字，3’b010——字，3’b100——Cache 行
         end
@@ -424,7 +426,7 @@ module cpu_bridge_axi(
             dcache_wr_data_reg <= 128'b0;
         end                                        // @RICKY 请重点检查！！！！！！！！！！！
         else if (w_current_state == W_IDLE) begin // 写请求状态机为空闲状态，更新数据到写缓存中
-            dacache_wr_strb_reg <= dcache_wr_strb;
+            dcache_wr_strb_reg <= dcache_wr_strb;
             dcache_wr_data_reg <= dcache_wr_data;
         end
         else if (w_current_state != W_IDLE) begin // 只要不为空闲状态，就慢慢以 Burst 方式发送数据
