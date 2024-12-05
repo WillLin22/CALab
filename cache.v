@@ -11,9 +11,7 @@ module cache (
     input [`OFFSETLEN-1:0]  offset,
     input [3:0]             wstrb,
     input [31:0]            wdata,
-    // added for uncache
-    input                   uncache, // 是否为非缓存访问
-
+    
     output                  addr_ok,
     output                  data_ok,
     output [31:0]           rdata,
@@ -30,7 +28,13 @@ module cache (
     output [31:0]           wr_addr,
     output [3:0]            wr_wstrb,// only when wr_type is 010 or 001 or 000 make sense
     output [`WIDTH*8-1:0]   wr_data,
-    input                   wr_rdy
+    input                   wr_rdy,
+    // added for uncache
+    input                   uncache, // 是否为非缓存访问
+    // added for cacop, separate path
+    input                   cacop_en,
+    input  [31:0]           cacop_pa,
+    input  [1:0]            code_4_3 // 0:指定cache行tag置0  1:指定cache行无效并写回（如D=1） 2： 取
 );
 wire reset = ~resetn;
 //Cache and cpu/tlb interface
