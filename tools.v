@@ -84,3 +84,23 @@ module encoder_2_1 (
 assign out = in[1];
 assign error = &in;  
 endmodule
+
+module counter_ones_4_2(
+    input wire [3:0] in,
+    output reg [2:0] out
+);
+always @(*) begin
+    case (in)
+        4'b0000: out = 2'b00;
+        4'b0001: out = 2'b00;
+        4'b0010: out = 2'b00;
+        4'b0011: out = 2'b01;
+        4'b0100: out = 2'b00;
+        4'b1000: out = 2'b00;
+        4'b1100: out = 2'b01;
+        4'b1111: out = 2'b10;
+        default: out = 2'b10;
+endcase
+end
+
+endmodule

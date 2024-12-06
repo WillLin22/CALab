@@ -132,7 +132,7 @@ HitGen hitgen(
 //wr
 wire missrd_ok;
 wire misswr_ok;
-assign wr_data = uncache_reg ? datawr_reg: wdata_reg;
+assign wr_data = uncache_reg ?  wdata_reg : datawr_reg;
 assign wr_wstrb = wstrb32_reg;
 assign wr_type  = uncache_reg?3'b010:3'b100;
 assign wr_addr  = uncache_reg?{Tag, Idx, Offset[3:2], 2'b0}:{tagv[hitway][`TAGR], Idx, 4'b0};
@@ -148,8 +148,14 @@ always @(posedge clk) begin
     else if((ret_valid||ret_last)&&!uncache_reg)
         cnt <= cnt+2'b01;
 end
+integer j;
 always @(posedge clk) begin
-    if(ret_valid)
+    if(reset)begin
+        for(j=0;j<`WIDTH/4;j=j+1)begin
+            datard_reg[j] <= 32'h0;
+        end
+    end
+    else if(ret_valid)
         datard_reg[cnt] <= ret_data;
 end
 genvar i;
@@ -185,6 +191,23 @@ Fetch_128_32 fetch_128_32_inst(
 );
 
 always @(posedge clk) begin
+    if(reset)begin
+        pa_reg <= 32'h0;
+        wr_reg <= 1'b0;
+        wstrb_reg <= 4'h0;
+        wdata_reg <= 128'h0;
+        uncache_reg <= 1'b0;
+        wstrb32_reg <= 4'h0;
+        index_reg <= 10'h0;
+        tag_reg <= 10'h0;
+        offset_reg <= 12'h0;
+        tagv_reg[0] <= 10'h0;
+        tagv_reg[1] <= 10'h0;
+        datawr_reg <= 128'h0;
+        miss_rding <= 1'b0;
+        miss_wring <= 1'b0;
+        replace <= 1'b0;
+    end
     if(IDLE&&in_valid)begin
         pa_reg <= pa_from_tlb;
         wr_reg <= in_op;
