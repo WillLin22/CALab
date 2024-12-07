@@ -9,50 +9,50 @@ module cpu_bridge_axi(
     output: bridge --> axi
     */
     // ar: read req channel 读请求通道
-    output  [ 3:0]      arid,    // 读请求ID
-    output  [31:0]      araddr,  // 读请求地址
+    (*mark_debug = "true"*)output  [ 3:0]      arid,    // 读请求ID
+    (*mark_debug = "true"*)output  [31:0]      araddr,  // 读请求地址
     output  [ 7:0]      arlen,   // 读请求传输长度（数据传输拍数） // 加入cache后需要修改
     output  [ 2:0]      arsize,  // 读请求传输大小（数据传输每拍的字节数） // 加入cache后固定为3'b010
     output  [ 1:0]      arburst, // 传输类型（固定为2'b1）
     output  [ 1:0]      arlock,  // 原子锁（固定为2'b0）
     output  [ 3:0]      arcache, // Cache属性（固定为4'b0）
     output  [ 2:0]      arprot,  // 保护属性（固定为3'b0）
-    output              arvalid, // 读请求地址有效
-    input               arready, // Slave端准备好接收地址传输
+    (*mark_debug = "true"*)output              arvalid, // 读请求地址有效
+    (*mark_debug = "true"*)input               arready, // Slave端准备好接收地址传输
 
     // r: read response channel 读响应通道
-    input   [ 3:0]      rid,     // 读请求ID号，同一请求rid与arid一致
-    input   [31:0]      rdata,   // 读请求读出的数据
+    (*mark_debug = "true"*)input   [ 3:0]      rid,     // 读请求ID号，同一请求rid与arid一致
+    (*mark_debug = "true"*)input   [31:0]      rdata,   // 读请求读出的数据
     input   [ 1:0]      rresp,   // 读请求是否完成(忽略)
     input               rlast,   // 读请求最后一拍数据的指示信号(忽略)
-    input              	rvalid,  // 读请求数据有效
-    output             	rready,  // Master端准备好接受数据
+    (*mark_debug = "true"*)input              	rvalid,  // 读请求数据有效
+    (*mark_debug = "true"*)output             	rready,  // Master端准备好接受数据
 
     // aw: write req channel  写请求通道
-    output  [ 3:0]      awid,    // 写请求的ID号（固定为4'b1）
-    output  [31:0]      awaddr,  // 写请求的地址
-    output  [ 7:0]      awlen,   // 写请求传输长度（拍数，固定为8'b0）
+    (*mark_debug = "true"*)output  [ 3:0]      awid,    // 写请求的ID号（固定为4'b1）
+    (*mark_debug = "true"*)output  [31:0]      awaddr,  // 写请求的地址
+    (*mark_debug = "true"*)output  [ 7:0]      awlen,   // 写请求传输长度（拍数，固定为8'b0）
     output  [ 2:0]      awsize,  // 写请求传输每拍字节数
     output  [ 1:0]      awburst, // 写请求传输类型（固定为2'b1）
     output  [ 1:0]      awlock,  // 原子锁（固定为2'b0）
     output  [ 3:0]      awcache, // Cache属性（固定为4'b0）
     output  [ 2:0]      awprot,  // 保护属性（固定为3'b0）
-    output              awvalid, // 写请求地址有效
-    input              	awready, // Slave端准备好接受地址传输 
+    (*mark_debug = "true"*)output              awvalid, // 写请求地址有效
+    (*mark_debug = "true"*)input              	awready, // Slave端准备好接受地址传输 
 
     // w: write data channel 写数据通道
-    output  [ 3:0]      wid,      // 写请求的ID号（固定为4'b1）
-    output  [31:0]      wdata,    // 写请求的写数据
-    output  [ 3:0]      wstrb,    // 写请求字节选通位
-    output          	wlast,    // 写请求的最后一拍数据的指示信号（固定为1'b1）
-    output             	wvalid,   // 写数据有效
-    input              	wready,   // Slave端准备好接受写数据传输
+    (*mark_debug = "true"*)output  [ 3:0]      wid,      // 写请求的ID号（固定为4'b1）
+    (*mark_debug = "true"*)output  [31:0]      wdata,    // 写请求的写数据
+    (*mark_debug = "true"*)output  [ 3:0]      wstrb,    // 写请求字节选通位
+    (*mark_debug = "true"*)output          	wlast,    // 写请求的最后一拍数据的指示信号（固定为1'b1）
+    (*mark_debug = "true"*)output             	wvalid,   // 写数据有效
+    (*mark_debug = "true"*)input              	wready,   // Slave端准备好接受写数据传输
 
     // wr: write response channel 写请求通道
     input   [ 3:0]      bid,      // 写请求的ID号(忽略)
     input   [ 1:0]      bresp,    // 写请求完成信号(忽略)
-    input              	bvalid,   // 写请求响应有效
-    output             	bready,   // Master端准备好接收响应信号
+    (*mark_debug = "true"*)input              	bvalid,   // 写请求响应有效
+    (*mark_debug = "true"*)output             	bready,   // Master端准备好接收响应信号
 
     //  icache rd interface
     input               icache_rd_req,
@@ -64,21 +64,21 @@ module cpu_bridge_axi(
     output  [31:0]      icache_ret_data,
 
     // dcache rd interface
-	input              	dcache_rd_req,
+	(*mark_debug = "true"*)input              	dcache_rd_req,
     input   [ 2:0]      dcache_rd_type,
-    input   [31:0]      dcache_rd_addr,
-    output             	dcache_rd_rdy,
-    output             	dcache_ret_valid,
-	output				dcache_ret_last,
-    output  [31:0]      dcache_ret_data,
+    (*mark_debug = "true"*)input   [31:0]      dcache_rd_addr,
+    (*mark_debug = "true"*)output             	dcache_rd_rdy,
+    (*mark_debug = "true"*)output             	dcache_ret_valid,
+	(*mark_debug = "true"*)output				dcache_ret_last,
+    (*mark_debug = "true"*)output  [31:0]      dcache_ret_data,
 
     // dcache wr interface
-    input              	dcache_wr_req,
+    (*mark_debug = "true"*)input              	dcache_wr_req,
     input   [ 2:0]      dcache_wr_type,
-    input   [31:0]      dcache_wr_addr,
-    input   [ 3:0]      dcache_wr_wstrb,
-	input	[127:0]		dcache_wr_data,
-	output				dcache_wr_rdy  // wr_rdy 为 1 表示 AXI 总线内部 16字节写缓存为空，可以接收 wr_req
+    (*mark_debug = "true"*)input   [31:0]      dcache_wr_addr,
+    (*mark_debug = "true"*)input   [ 3:0]      dcache_wr_wstrb,
+	(*mark_debug = "true"*)input	[127:0]		dcache_wr_data,
+	(*mark_debug = "true"*)output				dcache_wr_rdy  // wr_rdy 为 1 表示 AXI 总线内部 16字节写缓存为空，可以接收 wr_req
 );
 
     localparam  // 读请求状态机
@@ -120,7 +120,8 @@ module cpu_bridge_axi(
 
     wire read_block; // 写后读阻塞信号。只要有与读请求相同地址的写请求，就停止发起读请求直至Master 端收到写响应
     wire is_writing = (w_current_state == W_REQ_START) | (w_current_state == W_ADDR_RESP) | (w_current_state == W_DATA_RESP) | (w_current_state == W_REQ_END); // 有写操作
-    assign read_block = (araddr == awaddr) && is_writing && (b_current_state != B_END); // 写后读(读写地址相同且写操作数据未写入)，则需要阻塞
+    assign read_block = ((araddr == awaddr) && is_writing && (b_current_state != B_END))// 写后读(读写地址相同且写操作数据未写入)，则需要阻塞
+                        || (&ar_wait_resp_cnt);//满了
 
     wire areset;
     assign areset = ~aresetn;
@@ -234,7 +235,7 @@ module cpu_bridge_axi(
                     w_next_state = W_IDLE;
                 end
                 //else if(wr_data_req | wr_inst_req) begin // 有写请求，则进入写请求开始状态
-                else if(dcache_wr_req) begin // 有写请求，则进入写请求开始状态
+                else if(dcache_wr_req&& ~&aw_wait_resp_cnt) begin // 有写请求，则进入写请求开始状态
                     w_next_state = W_REQ_START;
                 end
                 else begin
@@ -331,7 +332,7 @@ module cpu_bridge_axi(
         else if(awvalid & awready) begin	// 握手成功
 			wburst_cnt <= awlen;
         end
-		else if(wvalid & wready) begin	// 握手成功
+		else if(wvalid & wready && wlast) begin	// 握手成功
 			wburst_cnt <= wburst_cnt - 1'b1;
         end
 	end
@@ -361,7 +362,7 @@ module cpu_bridge_axi(
     assign araddr  = araddr_reg;
     assign arlen   = arlen_reg; // 读请求传输长度（数据传输拍数）根据读请求类型来确定。
     assign arsize  = 3'b010; // 读请求传输大小（数据传输每拍的字节数） // 加入cache后固定为3'b010
-    assign arburst = 2'b1;
+    assign arburst = 2'b01;
     assign arlock  = 1'b0;
     assign arcache = 4'b0;
     assign arprot  = 3'b0;
@@ -372,13 +373,13 @@ module cpu_bridge_axi(
 		if(areset) begin
 			ar_wait_resp_cnt <= 2'b0;
         end
-		else if(arvalid && arready && rvalid && rready) begin // 读请求和读数据通道同时完成握手，请求得到响应
+		else if(arvalid && arready && rvalid && rready && rlast) begin // 读请求和读数据通道同时完成握手，请求得到响应
 			ar_wait_resp_cnt <= ar_wait_resp_cnt;
         end		
 		else if(arvalid && arready) begin // 读请求握手
 			ar_wait_resp_cnt <= ar_wait_resp_cnt + 1'b1;
         end
-		else if(rvalid && rready) begin // 读响应握手
+		else if(rvalid && rready && rlast) begin // 读响应握手
 			ar_wait_resp_cnt <= ar_wait_resp_cnt - 1'b1;
         end
 	end
@@ -406,7 +407,11 @@ module cpu_bridge_axi(
     assign awid     = 4'b1;
     assign awaddr   = awaddr_reg;
     assign awlen    = awlen_reg;
-    assign awsize   = 3'b010; // 写请求传输大小（数据传输每拍的字节数） // 加入cache后固定为3'b010
+    counter_ones_4_2 counter_aw(
+        .in(wstrb_reg),
+       .out(awsize)
+    );
+    // assign awsize   = 3'b010; 
     assign awburst  = 2'b01;
     assign awlock   = 1'b0;
     assign awcache  = 4'b0;
@@ -476,25 +481,15 @@ module cpu_bridge_axi(
     assign bready = (w_current_state == W_REQ_END); // 主方准备好接收写响应，等待从方发送代表写请求响应有效的 bvalid 信号。
 
     /* --------------------- 传给cpu（rdata 缓冲区）------------------------*/
-    reg [31:0] icache_rdata_buffer; // 用于缓存icache读出的数据，以便传给CPU
-    reg [31:0] dcache_rdata_buffer; // 用于缓存dcache读出的数据，以便传给CPU
     reg [3:0] rid_reg;
 
     always @(posedge aclk) begin
         if (areset) begin
-            icache_rdata_buffer <= 32'b0;
-            dcache_rdata_buffer <= 32'b0;
             //inst_sram_rdata_reg <= 32'b0;
             //data_sram_rdata_reg <= 32'b0;
             rid_reg <= 4'b0;
         end
-        else if (rvalid && rready) begin
-            if (rid[0]) begin // 读请求来自数据RAM
-                dcache_rdata_buffer <= rdata;
-            end
-            else begin // 读请求来自指令RAM
-                icache_rdata_buffer <= rdata;
-            end
+        else if (rvalid && rready && rlast) begin
             //inst_sram_rdata_reg <= rdata & {32{~rid[0]}}; // 读请求读出的数据
             //data_sram_rdata_reg <= rdata & {32{rid[0]}};
             rid_reg <= rid;
@@ -509,13 +504,13 @@ module cpu_bridge_axi(
     //assign inst_sram_data_ok = (~rid_reg[0] && (r_current_state == R_DATA_END)) | (~bid[0] && bvalid && bready);
     //assign data_sram_data_ok = (rid_reg[0] && (r_current_state == R_DATA_END)) | (bid[0] && bvalid && bready);
     assign icache_rd_rdy = ar_current_state==AR_IDLE; 
-    assign dcache_rd_rdy = ar_current_state==AR_IDLE;
-    assign icache_ret_data = icache_rdata_buffer;
-    assign dcache_ret_data = dcache_rdata_buffer;
-    assign icache_ret_valid = ~rid_reg[0] && (r_current_state == R_DATA_END || r_current_state == R_DATA_START)  ; // 返回icache数据有效信号
-    assign dcache_ret_valid = rid_reg[0] && (r_current_state == R_DATA_END || r_current_state == R_DATA_START); // 返回dcache数据有效信号
-    assign icache_ret_last = ~rid_reg[0] && (r_current_state == R_DATA_END); // 返回icache数据结束信号
-    assign dcache_ret_last = rid_reg[0] && (r_current_state == R_DATA_END); // 返回dcache数据结束信号
+    assign dcache_rd_rdy = ar_current_state==AR_IDLE&&!icache_rd_req;
+    assign icache_ret_data = rdata;
+    assign dcache_ret_data = rdata;
+    assign icache_ret_valid = ~rid[0] && (rvalid)  ; // 返回icache数据有效信号
+    assign dcache_ret_valid = rid[0] && (rvalid); // 返回dcache数据有效信号
+    assign icache_ret_last = ~rid[0] && (rlast); // 返回icache数据结束信号
+    assign dcache_ret_last = rid[0] && (rlast); // 返回dcache数据结束信号
     assign dcache_wr_rdy = (w_current_state == W_IDLE); // 当前没有写请求则可以接收数据RAM的写请求
 
 endmodule

@@ -8,34 +8,34 @@ module mycpu_core
     input  wire        resetn,
 
     // inst sram interface
-    output wire        inst_sram_req,
+    (*mark_debug = "true"*)output wire        inst_sram_req,
     output wire        inst_sram_wr,
     output wire [1:0]  inst_sram_size,
     output wire [3:0]  inst_sram_wstrb,
-    output wire [31:0] inst_sram_addr,
+    (*mark_debug = "true"*)output wire [31:0] inst_sram_addr,
     output wire [31:0] inst_sram_wdata,
-    input  wire        inst_sram_addr_ok,
-    input  wire        inst_sram_data_ok,         
-    input  wire [31:0] inst_sram_rdata,
+    (*mark_debug = "true"*)input  wire        inst_sram_addr_ok,
+    (*mark_debug = "true"*)input  wire        inst_sram_data_ok,         
+    (*mark_debug = "true"*)input  wire [31:0] inst_sram_rdata,
     output wire        if_icache_uncache,  // added for uncache
 
     // data sram interface
-    output wire        data_sram_req,
-    output wire        data_sram_wr,
-    output wire [1:0]  data_sram_size,
-    output wire [3:0]  data_sram_wstrb,
-    output wire [31:0] data_sram_addr,
-    output wire [31:0] data_sram_wdata,
-    input  wire        data_sram_addr_ok,
-    input  wire        data_sram_data_ok, 
-    input  wire [31:0] data_sram_rdata,
+    (*mark_debug = "true"*)output wire        data_sram_req,
+    (*mark_debug = "true"*)output wire        data_sram_wr,
+    (*mark_debug = "true"*)output wire [1:0]  data_sram_size,
+    (*mark_debug = "true"*)output wire [3:0]  data_sram_wstrb,
+    (*mark_debug = "true"*)output wire [31:0] data_sram_addr,
+    (*mark_debug = "true"*)output wire [31:0] data_sram_wdata,
+    (*mark_debug = "true"*)input  wire        data_sram_addr_ok,
+    (*mark_debug = "true"*)input  wire        data_sram_data_ok, 
+    (*mark_debug = "true"*)input  wire [31:0] data_sram_rdata,
     output wire        if_dcache_uncache,    // added for uncache
 
     // trace debug interface
-    output wire [31:0] debug_wb_pc,
-    output wire [ 3:0] debug_wb_rf_we,
-    output wire [ 4:0] debug_wb_rf_wnum,
-    output wire [31:0] debug_wb_rf_wdata,
+    (*mark_debug = "true"*)output wire [31:0] debug_wb_pc,
+    (*mark_debug = "true"*)output wire [ 3:0] debug_wb_rf_we,
+    (*mark_debug = "true"*)output wire [ 4:0] debug_wb_rf_wnum,
+    (*mark_debug = "true"*)output wire [31:0] debug_wb_rf_wdata,
 
     // ICACHE interface
     output wire [31:0] inst_virtual_addr,
@@ -358,7 +358,7 @@ wire handshake_MEM_WB = allow_in_WB & ready_go_MEM;
 reg valid_IF;
 reg valid_ID,valid_EX,valid_MEM,valid_WB;
 //* data
-wire [31:0] pc_IF;
+(*mark_debug = "true"*)wire [31:0] pc_IF;
 reg [31:0] pc_ID;
 reg [31:0] instreg_IF;//取指阶段若dataok到来时未握手则暂存指令
 reg [31:0] inst_ID;//ID阶段的译码指令
@@ -368,7 +368,8 @@ reg [14:0] alu_op_EX;
 reg [4:0] dest_EX;
 reg mem_we_EX;
 reg res_from_mem_EX, rf_we_EX;
-reg [31:0] result_all_MEM, pc_MEM;
+reg [31:0] result_all_MEM;
+(*mark_debug = "true"*)reg[31:0] pc_MEM;
 reg [4:0] dest_MEM;
 reg res_from_mem_MEM,rf_we_MEM;
 reg [4:0] dest_WB;
@@ -539,10 +540,10 @@ assign inst_rdcntid = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & o
 assign inst_rdcntvl_w = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h0] & (inst_ID[14:10] == 5'b11000) & (inst_ID[9:5] == 5'b00000);
 assign inst_rdcntvh_w = op_31_26_d[6'h0] & op_25_22_d[4'h0] & op_21_20_d[2'h0] & op_19_15_d[5'h0] & (inst_ID[14:10] == 5'b11001) & (inst_ID[9:5] == 5'b00000);
 
-assign inst_tlbsrch = op_31_26_d[6'h1] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & inst_ID[14:10] == 5'b01010 & (~|inst[9:0]);
-assign inst_tlbrd   = op_31_26_d[6'h1] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & inst_ID[14:10] == 5'b01011 & (~|inst[9:0]);
-assign inst_tlbwr   = op_31_26_d[6'h1] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & inst_ID[14:10] == 5'b01100 & (~|inst[9:0]);
-assign inst_tlbfill = op_31_26_d[6'h1] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & inst_ID[14:10] == 5'b01101 & (~|inst[9:0]);
+assign inst_tlbsrch = op_31_26_d[6'h1] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & inst_ID[14:10] == 5'b01010 & (~|inst_ID[9:0]);
+assign inst_tlbrd   = op_31_26_d[6'h1] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & inst_ID[14:10] == 5'b01011 & (~|inst_ID[9:0]);
+assign inst_tlbwr   = op_31_26_d[6'h1] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & inst_ID[14:10] == 5'b01100 & (~|inst_ID[9:0]);
+assign inst_tlbfill = op_31_26_d[6'h1] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] & inst_ID[14:10] == 5'b01101 & (~|inst_ID[9:0]);
 
 assign inst_invtlb  = op_31_26_d[6'h1] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h13];
 
@@ -647,12 +648,14 @@ assign addr_ex_physical = ex_trans_direct ? addr_ex_direct
                         : (addr_ex_tlb)));//ex_trans_tlb 
 
 // add dcache_uncache signal --exp22
-assign if_dcache_uncache = ex_trans_direct ? ~crmd_datm : (ex_trans_dmw0 ? ~tlb_dmw0_mat : (ex_trans_dmw1 ? ~tlb_dmw1_mat : (ex_trans_tlb ? tlb_out_s0_mat : 1'b0)));
+assign if_dcache_uncache = 1;//ex_trans_direct ? ~crmd_datm : (ex_trans_dmw0 ? ~tlb_dmw0_mat : (ex_trans_dmw1 ? ~tlb_dmw1_mat : (ex_trans_tlb ? tlb_out_s0_mat : 1'b0)));
 
 assign  mem_wdata_ID = rkd_value;
 
 // exp22
-assign data_virtual_addr = addr_ex_direct; // 传给总线的数据虚拟地址
+wire[31:0] data_virtual_addr_EX;
+reg[31:0] data_virtual_addr_MEM;
+assign data_virtual_addr_EX = addr_ex_direct; // 传给总线的数据虚拟地址
 
 //* Mem instrs
 wire mem_byte, mem_half, mem_word, mem_signed;
@@ -761,7 +764,7 @@ end
 
 
 // exp21
-assign inst_virtual_addr = pc_direct; // 传给总线的指令虚拟地址
+assign inst_virtual_addr = inst_sram_addr; // 传给总线的指令虚拟地址
 
 wire [31:0]                 pc_direct; // 直接地址翻译
 wire [31:0]                 pc_dmw0; // 直接映射窗口地址翻译
@@ -808,7 +811,7 @@ assign exc_fs_fetch_invalid_IF = if_trans_tlb & tlb_out_s0_found & ~tlb_out_s0_v
 assign exc_fs_plv_invalid_IF = if_trans_tlb & tlb_out_s0_found & tlb_out_s0_v & (crmd_plv > tlb_out_s0_plv); // 访存操作的虚地址在 TLB 中找到了匹配且 V=1 的项，但是访问的特权等级不合规，将触发该例外。特权等级不合规体现为，该页表项的 CSR.CRMD.PLV 值大于页表项中的 PLV。
 
 // add icache_uncache signal -- exp22
-assign if_icache_uncache = if_trans_direct ? ~crmd_datf : (if_trans_dmw0 ? ~tlb_dmw0_mat : (if_trans_dmw1 ? ~tlb_dmw1_mat : (if_trans_tlb ? tlb_out_s0_mat : 1'b0)));
+assign if_icache_uncache = 0;//if_trans_direct ? ~crmd_datf : (if_trans_dmw0 ? ~tlb_dmw0_mat : (if_trans_dmw1 ? ~tlb_dmw1_mat : (if_trans_tlb ? tlb_out_s0_mat : 1'b0)));
 
 //-- IF stage
 always @(posedge clk) begin
@@ -1171,6 +1174,7 @@ always @(posedge clk) begin
         exc_es_plv_invalid_MEM <= 1'b0;
         exc_es_modify_MEM <= 1'b0;
         tlb_refetch_MEM <= 1'b0;
+        data_virtual_addr_MEM <= 32'b0;
     end
     else if(handshake_EX_MEM)begin
         res_from_mem_MEM <= res_from_mem_EX;
@@ -1225,12 +1229,14 @@ always @(posedge clk) begin
         exc_es_plv_invalid_MEM <= exc_es_plv_invalid_EX;
         exc_es_modify_MEM <= exc_es_modify_EX;
         tlb_refetch_MEM <= tlb_refetch_EX;
+        data_virtual_addr_MEM <= data_virtual_addr_EX;
     end
     else if(ertn_flush_WB)
         ertn_flush_MEM <= 1'b0;
     else if(tlb_refetch_WB)
         tlb_refetch_MEM <= 1'b0;
 end
+assign data_virtual_addr = data_sram_addr_MEM;
 wire ex_EX;
 assign ex_EX = ALE_EX | exc_es_load_invalid_EX | exc_es_store_invalid_EX | exc_es_modify_EX | exc_es_plv_invalid_EX | exc_es_tlb_refill_EX;
 
