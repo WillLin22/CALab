@@ -140,7 +140,7 @@ reg [$clog2(`WIDTH/4)-1:0] cnt;
 always @(posedge clk) begin
     if(reset)
         cnt <= 2'b00;
-    else if((ret_valid||ret_last)&&!uncache_reg)
+    else if(MISS&&(ret_valid||ret_last)&&!uncache_reg)
         cnt <= cnt+2'b01;
 end
 always @(posedge clk) begin
