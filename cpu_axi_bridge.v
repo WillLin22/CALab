@@ -55,30 +55,30 @@ module cpu_bridge_axi(
     (*mark_debug = "true"*)output             	bready,   // Master端准备好接收响应信号
 
     //  icache rd interface
-    input               icache_rd_req,
+    (*mark_debug = "true"*)input               icache_rd_req,
     input   [ 2:0]      icache_rd_type,
-    input   [31:0]      icache_rd_addr,
+    (*mark_debug = "true"*)input   [31:0]      icache_rd_addr,
     output              icache_rd_rdy,	    // icache_addr_ok
-    output              icache_ret_valid,	// icache_data_ok
-	output				icache_ret_last,
-    output  [31:0]      icache_ret_data,
+    (*mark_debug = "true"*)output              icache_ret_valid,	// icache_data_ok
+	(*mark_debug = "true"*)output				icache_ret_last,
+    (*mark_debug = "true"*)output  [31:0]      icache_ret_data,
 
     // dcache rd interface
-	(*mark_debug = "true"*)input              	dcache_rd_req,
+	input              	dcache_rd_req,
     input   [ 2:0]      dcache_rd_type,
-    (*mark_debug = "true"*)input   [31:0]      dcache_rd_addr,
-    (*mark_debug = "true"*)output             	dcache_rd_rdy,
-    (*mark_debug = "true"*)output             	dcache_ret_valid,
-	(*mark_debug = "true"*)output				dcache_ret_last,
-    (*mark_debug = "true"*)output  [31:0]      dcache_ret_data,
+    input   [31:0]      dcache_rd_addr,
+    output             	dcache_rd_rdy,
+    output             	dcache_ret_valid,
+	output				dcache_ret_last,
+    output  [31:0]      dcache_ret_data,
 
     // dcache wr interface
-    (*mark_debug = "true"*)input              	dcache_wr_req,
+    input              	dcache_wr_req,
     input   [ 2:0]      dcache_wr_type,
-    (*mark_debug = "true"*)input   [31:0]      dcache_wr_addr,
-    (*mark_debug = "true"*)input   [ 3:0]      dcache_wr_wstrb,
-	(*mark_debug = "true"*)input	[127:0]		dcache_wr_data,
-	(*mark_debug = "true"*)output				dcache_wr_rdy  // wr_rdy 为 1 表示 AXI 总线内部 16字节写缓存为空，可以接收 wr_req
+    input   [31:0]      dcache_wr_addr,
+    input   [ 3:0]      dcache_wr_wstrb,
+	input	[127:0]		dcache_wr_data,
+	output				dcache_wr_rdy  // wr_rdy 为 1 表示 AXI 总线内部 16字节写缓存为空，可以接收 wr_req
 );
 
     localparam  // 读请求状态机

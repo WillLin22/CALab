@@ -52,18 +52,18 @@ wire [`INDEXLEN-1:0]        in_idx = index;
 wire [`OFFSETLEN-1:0]       in_offset = offset;
 wire [`TAGLEN-1:0]          in_tag = tag;
 
-reg [4:0] state;// refill miss lookup idle
+(*mark_debug = "true"*)reg [4:0] state;// refill miss lookup idle
 wire IDLE = state == 5'b00001;
 wire LOOKUP = state == 5'b00010;
 wire MISS = state == 5'b00100;
 wire REPLACE = state == 5'b01000;
 wire REFILL = state == 5'b10000;
 wire error_state = !IDLE&&!LOOKUP&&!MISS&&!REPLACE&&!REFILL;
-wire [`INDEXLEN-1:0]             Idx;
-wire [`OFFSETLEN-1:0]            Offset;
-wire [`TAGLEN-1:0]               Tag;
-wire hit;
-wire hitway;
+(*mark_debug = "true"*)wire [`INDEXLEN-1:0]             Idx;
+(*mark_debug = "true"*)wire [`OFFSETLEN-1:0]            Offset;
+(*mark_debug = "true"*)wire [`TAGLEN-1:0]               Tag;
+(*mark_debug = "true"*)wire hit;
+(*mark_debug = "true"*)wire hitway;
 
 wire [31:0] pa_from_tlb = {in_tag, Idx, in_offset};
 reg  [31:0] pa_reg;

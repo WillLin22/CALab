@@ -20,15 +20,15 @@ module mycpu_core
     output wire        if_icache_uncache,  // added for uncache
 
     // data sram interface
-    (*mark_debug = "true"*)output wire        data_sram_req,
-    (*mark_debug = "true"*)output wire        data_sram_wr,
-    (*mark_debug = "true"*)output wire [1:0]  data_sram_size,
-    (*mark_debug = "true"*)output wire [3:0]  data_sram_wstrb,
-    (*mark_debug = "true"*)output wire [31:0] data_sram_addr,
-    (*mark_debug = "true"*)output wire [31:0] data_sram_wdata,
-    (*mark_debug = "true"*)input  wire        data_sram_addr_ok,
-    (*mark_debug = "true"*)input  wire        data_sram_data_ok, 
-    (*mark_debug = "true"*)input  wire [31:0] data_sram_rdata,
+    output wire        data_sram_req,
+    output wire        data_sram_wr,
+    output wire [1:0]  data_sram_size,
+    output wire [3:0]  data_sram_wstrb,
+    output wire [31:0] data_sram_addr,
+    output wire [31:0] data_sram_wdata,
+    input  wire        data_sram_addr_ok,
+    input  wire        data_sram_data_ok, 
+    input  wire [31:0] data_sram_rdata,
     output wire        if_dcache_uncache,    // added for uncache
 
     // trace debug interface
@@ -811,7 +811,7 @@ assign exc_fs_fetch_invalid_IF = if_trans_tlb & tlb_out_s0_found & ~tlb_out_s0_v
 assign exc_fs_plv_invalid_IF = if_trans_tlb & tlb_out_s0_found & tlb_out_s0_v & (crmd_plv > tlb_out_s0_plv); // 访存操作的虚地址在 TLB 中找到了匹配且 V=1 的项，但是访问的特权等级不合规，将触发该例外。特权等级不合规体现为，该页表项的 CSR.CRMD.PLV 值大于页表项中的 PLV。
 
 // add icache_uncache signal -- exp22
-assign if_icache_uncache = 0;//if_trans_direct ? ~crmd_datf : (if_trans_dmw0 ? ~tlb_dmw0_mat : (if_trans_dmw1 ? ~tlb_dmw1_mat : (if_trans_tlb ? tlb_out_s0_mat : 1'b0)));
+assign if_icache_uncache = if_trans_direct ? ~crmd_datf : (if_trans_dmw0 ? ~tlb_dmw0_mat : (if_trans_dmw1 ? ~tlb_dmw1_mat : (if_trans_tlb ? tlb_out_s0_mat : 1'b0)));
 
 //-- IF stage
 always @(posedge clk) begin
