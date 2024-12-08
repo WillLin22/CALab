@@ -104,13 +104,13 @@ module cpu_bridge_axi(
                 B_END           = 3'b100;
 
     // 状态机状态寄存器
-    reg [2:0] ar_current_state;
+    (*mark_debug = "true"*)reg [2:0] ar_current_state;
     reg [2:0] ar_next_state;
-    reg [2:0] r_current_state;
+    (*mark_debug = "true"*)reg [2:0] r_current_state;
     reg [2:0] r_next_state;
-    reg [4:0] w_current_state;
+    (*mark_debug = "true"*)reg [4:0] w_current_state;
     reg [4:0] w_next_state;
-    reg [2:0] b_current_state;
+    (*mark_debug = "true"*)reg [2:0] b_current_state;
     reg [2:0] b_next_state;
 
     // 请求已经握手成功而未响应的情况，用于计数
@@ -503,14 +503,14 @@ module cpu_bridge_axi(
     //assign data_sram_addr_ok = (arid[0] && arvalid && arready) | (wid[0] && awvalid && awready);
     //assign inst_sram_data_ok = (~rid_reg[0] && (r_current_state == R_DATA_END)) | (~bid[0] && bvalid && bready);
     //assign data_sram_data_ok = (rid_reg[0] && (r_current_state == R_DATA_END)) | (bid[0] && bvalid && bready);
-    assign icache_rd_rdy = ar_current_state==AR_IDLE; 
-    assign dcache_rd_rdy = ar_current_state==AR_IDLE&&!icache_rd_req;
+    assign icache_rd_rdy = ar_current_state==AR_IDLE&&~|ar_wait_resp_cnt; 
+    assign dcache_rd_rdy = ar_current_state==AR_IDLE&&!icache_rd_req&&~|ar_wait_resp_cnt;
     assign icache_ret_data = rdata;
     assign dcache_ret_data = rdata;
-    assign icache_ret_valid = ~rid[0] && (rvalid)  ; // 返回icache数据有效信号
-    assign dcache_ret_valid = rid[0] && (rvalid); // 返回dcache数据有效信号
-    assign icache_ret_last = ~rid[0] && (rlast); // 返回icache数据结束信号
-    assign dcache_ret_last = rid[0] && (rlast); // 返回dcache数据结束信号
-    assign dcache_wr_rdy = (w_current_state == W_IDLE); // 当前没有写请求则可以接收数据RAM的写请求
+    assign icache_ret_valid = ~rid[0] && (rvalid&&rready)  ; // 返回icache数据有效信号
+    assign dcache_ret_valid = rid[0] && (rvalid&&rready); // 返回dcache数据有效信号
+    assign icache_ret_last = ~rid[0] && (rlast&&rready); // 返回icache数据结束信号
+    assign dcache_ret_last = rid[0] && (rlast&&rready); // 返回dcache数据结束信号
+    assign dcache_wr_rdy = (w_current_state == W_IDLE)&&~|aw_wait_resp_cnt; // 当前没有写请求则可以接收数据RAM的写请求
 
 endmodule

@@ -648,7 +648,7 @@ assign addr_ex_physical = ex_trans_direct ? addr_ex_direct
                         : (addr_ex_tlb)));//ex_trans_tlb 
 
 // add dcache_uncache signal --exp22
-assign if_dcache_uncache = 1;//ex_trans_direct ? ~crmd_datm : (ex_trans_dmw0 ? ~tlb_dmw0_mat : (ex_trans_dmw1 ? ~tlb_dmw1_mat : (ex_trans_tlb ? tlb_out_s0_mat : 1'b0)));
+assign if_dcache_uncache = ex_trans_direct ? ~crmd_datm : (ex_trans_dmw0 ? ~tlb_dmw0_mat : (ex_trans_dmw1 ? ~tlb_dmw1_mat : (ex_trans_tlb ? tlb_out_s0_mat : 1'b0)));
 
 assign  mem_wdata_ID = rkd_value;
 

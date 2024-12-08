@@ -109,7 +109,7 @@ Extend_32_128 extend_32_128_inst(
     .out(wdata_extended)
 );
 //LOOKUP
-wire hiterror;
+(*mark_debug = "true"*)wire hiterror;
 HitGen hitgen(
     .reset(reset),
     .clk(clk),
@@ -158,7 +158,7 @@ generate for(i=0;i<`WIDTH/4;i=i+1)begin:gendgenerate
     assign datard_combined[i*32+31:i*32] = datard_reg[i];
 end
 endgenerate
-wire error_rdstate;
+(*mark_debug = "true"*)wire error_rdstate;
 MissRdState missrdstate(
     .reset(reset),
     .clk(clk),
@@ -170,14 +170,14 @@ MissRdState missrdstate(
     .ret_last(ret_last),
     .error(error_rdstate)
 );
-wire error_rd = !MISS&&cnt!=2'b00||(ret_last&&cnt!=2'b11&&!uncache_reg)||error_rdstate;
+(*mark_debug = "true"*)wire error_rd = !MISS&&cnt!=2'b00||(ret_last&&cnt!=2'b11&&!uncache_reg)||error_rdstate;
 
-wire error_miss = !MISS&&(miss_rding||miss_wring||missrd_ok||misswr_ok);
+(*mark_debug = "true"*)wire error_miss = !MISS&&(miss_rding||miss_wring||missrd_ok||misswr_ok);
 //REPLACE
 reg replace;// 1 for have been missed, 0 for not
 //REFILL
 assign out_dataok = REFILL;
-wire error_refill = REFILL&&!hit&&!uncache_reg;
+(*mark_debug = "true"*)wire error_refill = REFILL&&!hit&&!uncache_reg;
 Fetch_128_32 fetch_128_32_inst(
     .offset(Offset),
     .uncache(uncache_reg),
@@ -200,7 +200,7 @@ always @(posedge clk) begin
         miss_wring <= 1'b0;
         replace <= 1'b0;
     end
-    if(IDLE&&in_valid)begin
+    else if(IDLE&&in_valid)begin
         pa_reg <= pa_from_tlb;
         wr_reg <= in_op;
         wstrb_reg <= Wstrb;
@@ -276,7 +276,7 @@ DWrapper dwrapper(
     .D1(Drd[1])
 );
 
-wire error = error_state||error_rd||error_miss||error_refill;
+(*mark_debug = "true"*)wire error = error_state||error_rd||error_miss||error_refill;
 
     
 endmodule
