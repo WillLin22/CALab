@@ -92,8 +92,8 @@ reg  [3:0]                      wstrb32_reg;
 reg miss_rding;
 reg miss_wring;
 
-assign Idx = in_valid ? in_idx : pa_reg[`VAIDXR];
-assign Offset = in_valid ? in_offset : pa_reg[`VAOFFR];
+assign Idx = out_addrok ? in_idx : pa_reg[`VAIDXR];
+assign Offset = out_addrok ? in_offset : pa_reg[`VAOFFR];
 assign Tag = pa_reg[`VATAGR];
 
 
@@ -246,7 +246,7 @@ end
 
 TagVWrapper tagvwrapper(
     .clk(clk),
-    .en((IDLE&&in_valid||REPLACE)&&!uncache_reg),
+    .en((out_addrok||REPLACE)&&!uncache_reg),
     .idx(Idx),
     .tagvr1(tagvrd[0]),
     .tagvr2(tagvrd[1]),
@@ -256,7 +256,7 @@ TagVWrapper tagvwrapper(
 );
 DataWrapper datawrapper(
     .clk(clk),
-    .en((IDLE&&in_valid||REPLACE||REFILL&&wr_reg)&&!uncache_reg),
+    .en((out_addrok||REPLACE||REFILL&&wr_reg)&&!uncache_reg),
     .idx(Idx),
     .wr(REPLACE||REFILL&&wr_reg),
     .wr_way(hitway),
@@ -267,7 +267,7 @@ DataWrapper datawrapper(
 );
 DWrapper dwrapper(
     .clk(clk),
-    .en((IDLE&&in_valid||REPLACE||REFILL&&wr_reg)&&!uncache_reg),
+    .en((out_addrok||REPLACE||REFILL&&wr_reg)&&!uncache_reg),
     .wr(REPLACE||REFILL&&wr_reg),
     .wr_way(hitway),
     .idx(Idx),
