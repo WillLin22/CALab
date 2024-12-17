@@ -98,7 +98,7 @@ assign Tag = pa_reg[`VATAGR];
 
 
 //IDLE
-assign out_addrok = IDLE&&in_valid;
+assign out_addrok = (IDLE||REFILL)&&in_valid;
 wire [`WIDTH*8-1:0]  wdata_extended;
 wire [`WIDTH-1:0]  Wstrb;
 Extend_32_128 extend_32_128_inst(
@@ -200,7 +200,7 @@ always @(posedge clk) begin
         miss_wring <= 1'b0;
         replace <= 1'b0;
     end
-    else if(IDLE&&in_valid)begin
+    else if(out_addrok)begin
         pa_reg <= pa_from_tlb;
         wr_reg <= in_op;
         wstrb_reg <= Wstrb;
@@ -234,7 +234,7 @@ end
 always @(posedge clk) begin
     if(reset||REFILL)
         state <= 5'b00001;
-    else if(IDLE && in_valid)
+    else if(out_addrok)
         state <= 5'b00010;
     else if(LOOKUP && hit||REPLACE)
         state <= 5'b10000;
