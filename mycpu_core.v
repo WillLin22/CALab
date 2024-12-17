@@ -648,7 +648,7 @@ assign addr_ex_physical = ex_trans_direct ? addr_ex_direct
                         : (addr_ex_tlb)));//ex_trans_tlb 
 
 // add dcache_uncache signal --exp22
-assign if_dcache_uncache = 0;// ex_trans_direct ? ~crmd_datm : (ex_trans_dmw0 ? ~tlb_dmw0_mat : (ex_trans_dmw1 ? ~tlb_dmw1_mat : (ex_trans_tlb ? tlb_out_s0_mat : 1'b0)));
+assign if_dcache_uncache = ex_trans_direct ? ~crmd_datm : (ex_trans_dmw0 ? ~tlb_dmw0_mat : (ex_trans_dmw1 ? ~tlb_dmw1_mat : (ex_trans_tlb ? tlb_out_s0_mat : 1'b0)));
 
 assign  mem_wdata_ID = rkd_value;
 
@@ -811,7 +811,7 @@ assign exc_fs_fetch_invalid_IF = if_trans_tlb & tlb_out_s0_found & ~tlb_out_s0_v
 assign exc_fs_plv_invalid_IF = if_trans_tlb & tlb_out_s0_found & tlb_out_s0_v & (crmd_plv > tlb_out_s0_plv); // 访存操作的虚地址在 TLB 中找到了匹配且 V=1 的项，但是访问的特权等级不合规，将触发该例外。特权等级不合规体现为，该页表项的 CSR.CRMD.PLV 值大于页表项中的 PLV。
 
 // add icache_uncache signal -- exp22
-assign if_icache_uncache = 0;// if_trans_direct ? ~crmd_datf : (if_trans_dmw0 ? ~tlb_dmw0_mat : (if_trans_dmw1 ? ~tlb_dmw1_mat : (if_trans_tlb ? tlb_out_s0_mat : 1'b0)));
+assign if_icache_uncache = if_trans_direct ? ~crmd_datf : (if_trans_dmw0 ? ~tlb_dmw0_mat : (if_trans_dmw1 ? ~tlb_dmw1_mat : (if_trans_tlb ? tlb_out_s0_mat : 1'b0)));
 
 //-- IF stage
 always @(posedge clk) begin
