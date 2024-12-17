@@ -1611,7 +1611,7 @@ always @(posedge clk) begin
     else if(state_IF[1] & addr_ok_inst)
         state_IF <= 3'b100;
 end
-assign req_inst = state_IF[1];
+assign req_inst = state_IF[1]&&data_ok_inst;
 assign ready_go_IF = state_IF[0] | state_IF[2] & data_ok_inst;
 assign allow_in_IF = handshake_IF_ID;
 
