@@ -98,7 +98,7 @@ assign Tag = pa_reg[`VATAGR];
 
 
 //IDLE
-assign out_addrok = (IDLE||REFILL)&&in_valid;
+assign out_addrok = (IDLE||LOOKUP&&!wr_reg&&hit&&!uncache_reg||REFILL)&&in_valid;
 wire [`WIDTH*8-1:0]  wdata_extended;
 wire [`WIDTH-1:0]  Wstrb;
 Extend_32_128 extend_32_128_inst(
@@ -176,12 +176,12 @@ MissRdState missrdstate(
 //REPLACE
 reg replace;// 1 for have been missed, 0 for not
 //REFILL
-assign out_dataok = REFILL;
+assign out_dataok = REFILL||LOOKUP&&hit&&!wr_reg;
 (*mark_debug = "true"*)wire error_refill = REFILL&&!hit&&!uncache_reg;
 Fetch_128_32 fetch_128_32_inst(
     .offset(Offset),
     .uncache(uncache_reg),
-    .in(replace? datard_combined :datawr_reg),
+    .in(replace? datard_combined :LOOKUP?datard[hitway]:datawr_reg),
     .out(out_rdata)
 );
 
@@ -232,16 +232,18 @@ end
 
 //state control
 always @(posedge clk) begin
-    if(reset||REFILL)
+    if(reset)
         state <= 5'b00001;
     else if(out_addrok)
         state <= 5'b00010;
-    else if(LOOKUP && hit||REPLACE)
+    else if(LOOKUP && hit && wr_reg||REPLACE)
         state <= 5'b10000;
     else if(LOOKUP && !hit)
         state <= 5'b00100;
     else if(MISS &&(!miss_rding||missrd_ok)&&(!miss_wring||misswr_ok))
         state <= 5'b01000;
+    else if(REFILL||LOOKUP&&hit&&!wr_reg)
+        state <= 5'b00001;
 end
 
 TagVWrapper tagvwrapper(
