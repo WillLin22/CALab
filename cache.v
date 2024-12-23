@@ -110,7 +110,7 @@ wire [`TAGLEN-1:0] tag_global           = Tag;
 // cacop writeback
 wire cacop_wb = cacop_en_reg && hit && Drd[hitway] && Code_4_3 != 2'b00;
 // cache ready
-wire ready = IDLE||LOOKUP&&!wr_reg&&hit&&!uncache_reg&&!cache_en_reg||REFILL 
+wire ready = IDLE||LOOKUP&&!wr_reg&&hit&&!uncache_reg&&!cacop_en_reg||REFILL 
             ||LOOKUP&&!cacop_wb&&cacop_en_reg||MISS&&misswr_ok&&cacop_en_reg;
 
 assign Idx = out_addrok ? in_idx : pa_reg[`VAIDXR];
@@ -266,10 +266,10 @@ always @(posedge clk) begin
         state <= 5'b00010;
     else if(LOOKUP && hit && wr_reg&&!cacop_en_reg||REPLACE)
         state <= 5'b10000;
-    else if(LOOKUP && !hit && !cache_en_reg|| cacop_wb)
+    else if(LOOKUP && !hit &&! cacop_en_reg|| cacop_wb)
         state <= 5'b00100;
     else if(MISS &&(!miss_rding||missrd_ok)&&(!miss_wring||misswr_ok))
-        if(cache_en_reg)
+        if(cacop_en_reg)
             state <= 5'b00001;
         else 
             state <= 5'b01000;
@@ -279,13 +279,13 @@ end
 
 TagVWrapper tagvwrapper(
     .clk(clk),
-    .en(out_addrok||cacop_ok||(REPLACE)&&!uncache_reg||LOOKUP&&cache_en_reg&&hit),
+    .en(out_addrok||cacop_ok||(REPLACE)&&!uncache_reg||LOOKUP&&cacop_en_reg&&hit),
     .idx(index_global),
     .tagvr1(tagvrd[0]),
     .tagvr2(tagvrd[1]),
-    .wr(REPLACE||LOOKUP&&cache_en_reg&&hit),
+    .wr(REPLACE||LOOKUP&&cacop_en_reg&&hit),
     .wr_way(hitway),
-    .Tag(cache_en_reg?`TAGLEN'b0:Tag)
+    .Tag(cacop_en_reg?`TAGLEN'b0:Tag)
 );
 DataWrapper datawrapper(
     .clk(clk),
