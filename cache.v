@@ -101,7 +101,7 @@ reg [1:0] code_4_3_reg;
 wire [31:0]Cacop_va                     = cacop_ok ? cacop_va : cacop_va_reg;
 wire [1:0]Code_4_3                      = cacop_ok ? code_4_3 : code_4_3_reg;
 wire cacop_use_va                       = Code_4_3 == 2'b00 || Code_4_3 == 2'b01;
-wire [`INDEXLEN-1:0] cacop_idx          = cacop_use_va?Cacop_va[`INDEXLEN+1:2]:Idx;
+wire [`INDEXLEN-1:0] cacop_idx          = cacop_use_va?Cacop_va[`VAIDXR]:Idx;
 wire cacop_way                          = cacop_use_va?Cacop_va[0]:hitway;
 // global use variable
 wire [`INDEXLEN-1:0] index_global       = cacop_en ? cacop_idx : Idx;
