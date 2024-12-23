@@ -241,7 +241,7 @@ always @(posedge clk) begin
         tagv_reg[1] <= tagvrd[1];
         datawr_reg  <= datard[hitway];
         miss_rding  <= !hit&&!uncache_reg || uncache_reg&&!wr_reg;
-        miss_wring  <= cacop_en_reg?cacop_wb:(!hit&&Drd[hitway]&&!uncache_reg || uncache_reg&&wr_reg)
+        miss_wring  <= cacop_en_reg?cacop_wb:(!hit&&Drd[hitway]&&!uncache_reg || uncache_reg&&wr_reg);
     end
     else if(MISS)begin
         if(missrd_ok)
@@ -266,7 +266,7 @@ always @(posedge clk) begin
         state <= 5'b00010;
     else if(LOOKUP && hit && wr_reg&&!cacop_en_reg||REPLACE)
         state <= 5'b10000;
-    else if(LOOKUP && !hit &&! cacop_en_reg|| cacop_wb)
+    else if(LOOKUP && !hit && !cacop_en_reg|| cacop_wb)
         state <= 5'b00100;
     else if(MISS &&(!miss_rding||missrd_ok)&&(!miss_wring||misswr_ok))
         if(cacop_en_reg)
