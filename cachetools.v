@@ -83,6 +83,8 @@ module HitGen (
     input [`TAGLEN-1:0] Tag,
     input uncache,
     input en_for_miss,// set for 1 cycle each nothit, connect with REPLACE
+    input cacop_way_en,// set for given specific way
+    input cacop_way,
     output hit,
     output [$clog2(`WAY)-1:0] way,
     output error
@@ -94,7 +96,7 @@ wire [1:0] hitway;
 wire way_e, way_gen;
 genvar i;
 generate for(i = 0;i < `WAY; i=i+1) begin : hitway_gen
-    assign hitway[i] = tagv[i][`TAGR] == Tag && tagv[i][`VR] == 1;
+    assign hitway[i] = cacop_way_en?cacop_way:(tagv[i][`TAGR] == Tag && tagv[i][`VR] == 1);
 end
 endgenerate
 assign hit = (|hitway)&&!uncache;

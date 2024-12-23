@@ -33,8 +33,9 @@ module cache (
     input                   uncache, // 是否为非缓存访问
     // added for cacop, separate path
     input                   cacop_en,
-    input  [31:0]           cacop_pa,
-    input  [1:0]            code_4_3 // 0:指定cache行tag置0  1:指定cache行无效并写回（如D=1） 2： 取
+    input  [31:0]           cacop_va,
+    input  [1:0]            code_4_3,
+    output cacop_ok
 );
 wire reset = ~resetn;
 //Cache and cpu/tlb interface
@@ -92,13 +93,34 @@ reg  [3:0]                      wstrb32_reg;
 reg miss_rding;
 reg miss_wring;
 
+
+// cacop
+reg cacop_en_reg;
+reg [31:0] cacop_va_reg;
+reg [1:0] code_4_3_reg;
+wire [31:0]Cacop_va                     = cacop_ok ? cacop_va : cacop_va_reg;
+wire [1:0]Code_4_3                      = cacop_ok ? code_4_3 : code_4_3_reg;
+wire cacop_use_va                       = Code_4_3 == 2'b00 || Code_4_3 == 2'b01;
+wire [`INDEXLEN-1:0] cacop_idx          = cacop_use_va?Cacop_va[`INDEXLEN+1:2]:Idx;
+wire cacop_way                          = cacop_use_va?Cacop_va[0]:hitway;
+// global use variable
+wire [`INDEXLEN-1:0] index_global       = cacop_en ? cacop_idx : Idx;
+wire [`TAGLEN-1:0] tag_global           = Tag;
+
+// cacop writeback
+wire cacop_wb = cacop_en_reg && hit && Drd[hitway] && Code_4_3 != 2'b00;
+// cache ready
+wire ready = IDLE||LOOKUP&&!wr_reg&&hit&&!uncache_reg&&!cache_en_reg||REFILL 
+            ||LOOKUP&&!cacop_wb&&cacop_en_reg||MISS&&misswr_ok&&cacop_en_reg;
+
 assign Idx = out_addrok ? in_idx : pa_reg[`VAIDXR];
 assign Offset = out_addrok ? in_offset : pa_reg[`VAOFFR];
 assign Tag = pa_reg[`VATAGR];
 
 
 //IDLE
-assign out_addrok = (IDLE||LOOKUP&&!wr_reg&&hit&&!uncache_reg||REFILL)&&in_valid;
+assign out_addrok = ready&&in_valid&&!cacop_en;
+assign cacop_ok   = ready&&in_valid&&cacop_en;
 wire [`WIDTH*8-1:0]  wdata_extended;
 wire [`WIDTH-1:0]  Wstrb;
 Extend_32_128 extend_32_128_inst(
@@ -113,7 +135,7 @@ Extend_32_128 extend_32_128_inst(
 HitGen hitgen(
     .reset(reset),
     .clk(clk),
-    .idx(Idx),
+    .idx(index_global),
     .tagv1(tagv[0]),
     .tagv2(tagv[1]),
     .Tag(Tag),
@@ -121,6 +143,8 @@ HitGen hitgen(
     .en_for_miss((REPLACE)&&!uncache_reg),
     .hit(hit),
     .way(hitway),
+    .cacop_way_en(cacop_use_va),
+    .cacop_way(cacop_va[0]),
     .error(hiterror)
 );
 //MISS
@@ -130,7 +154,7 @@ wire misswr_ok;
 assign wr_data = uncache_reg ?  wdata_reg : datawr_reg;
 assign wr_wstrb = wstrb32_reg;
 assign wr_type  = uncache_reg?3'b010:3'b100;
-assign wr_addr  = uncache_reg?{Tag, Idx, Offset[3:2], 2'b0}:{tagv[hitway][`TAGR], Idx, 4'b0};
+assign wr_addr  = uncache_reg?{Tag, Idx, Offset[3:2], 2'b0}:{tagv[hitway][`TAGR], index_global, 4'b0};
 assign misswr_ok = wr_req;
 assign wr_req = miss_wring&&wr_rdy;
 //rd
@@ -199,21 +223,26 @@ always @(posedge clk) begin
         miss_rding <= 1'b0;
         miss_wring <= 1'b0;
         replace <= 1'b0;
+        cacop_en_reg <= 1'b0;
     end
-    else if(out_addrok)begin
+    else if(out_addrok||cacop_ok)begin
         pa_reg <= pa_from_tlb;
         wr_reg <= in_op;
         wstrb_reg <= Wstrb;
         wdata_reg <= wdata_extended;
-        uncache_reg <= uncache;
+        uncache_reg <= uncache&&!cacop_en;
         wstrb32_reg <= in_wstrb;
+        cacop_en_reg <= cacop_en;
+        cacop_va_reg <= cacop_va;
+        code_4_3_reg <= code_4_3;
     end
     else if(LOOKUP)begin
         tagv_reg[0] <= tagvrd[0];
         tagv_reg[1] <= tagvrd[1];
         datawr_reg  <= datard[hitway];
         miss_rding  <= !hit&&!uncache_reg || uncache_reg&&!wr_reg;
-        miss_wring  <= !hit&&Drd[hitway]&&!uncache_reg || uncache_reg&&wr_reg;
+        miss_wring  <= cacop_en_reg?(!hit&&Drd[hitway]&&!uncache_reg || uncache_reg&&wr_reg)
+                        : cacop_wb;
     end
     else if(MISS)begin
         if(missrd_ok)
@@ -234,32 +263,35 @@ end
 always @(posedge clk) begin
     if(reset)
         state <= 5'b00001;
-    else if(out_addrok)
+    else if(out_addrok||cacop_ok)
         state <= 5'b00010;
-    else if(LOOKUP && hit && wr_reg||REPLACE)
+    else if(LOOKUP && hit && wr_reg&&!cacop_en_reg||REPLACE)
         state <= 5'b10000;
-    else if(LOOKUP && !hit)
+    else if(LOOKUP && !hit && !cache_en_reg|| cacop_wb)
         state <= 5'b00100;
     else if(MISS &&(!miss_rding||missrd_ok)&&(!miss_wring||misswr_ok))
-        state <= 5'b01000;
-    else if(REFILL||LOOKUP&&hit&&!wr_reg)
+        if(cache_en_reg)
+            state <= 5'b00001;
+        else 
+            state <= 5'b01000;
+    else if(REFILL||LOOKUP&&hit&&!wr_reg&&!cacop_en_reg||LOOKUP&&(Code_4_3==2'b00||!hit)&&cacop_en_reg)
         state <= 5'b00001;
 end
 
 TagVWrapper tagvwrapper(
     .clk(clk),
-    .en((out_addrok||REPLACE)&&!uncache_reg),
-    .idx(Idx),
+    .en(out_addrok||cacop_ok||(REPLACE)&&!uncache_reg||LOOKUP&&cache_en_reg&&hit),
+    .idx(index_global),
     .tagvr1(tagvrd[0]),
     .tagvr2(tagvrd[1]),
-    .wr(REPLACE),
+    .wr(REPLACE||LOOKUP&&cache_en_reg&&hit),
     .wr_way(hitway),
-    .Tag(Tag)
+    .Tag(cache_en_reg?`TAGLEN'b0:Tag)
 );
 DataWrapper datawrapper(
     .clk(clk),
-    .en((out_addrok||REPLACE||REFILL&&wr_reg)&&!uncache_reg),
-    .idx(Idx),
+    .en(out_addrok||cacop_ok||(REPLACE||REFILL&&wr_reg)&&!uncache_reg),
+    .idx(index_global),
     .wr(REPLACE||REFILL&&wr_reg),
     .wr_way(hitway),
     .wstrb(REPLACE? 16'hffff :wstrb_reg),
@@ -269,10 +301,10 @@ DataWrapper datawrapper(
 );
 DWrapper dwrapper(
     .clk(clk),
-    .en((out_addrok||REPLACE||REFILL&&wr_reg)&&!uncache_reg),
+    .en(out_addrok||cacop_ok||(REPLACE||REFILL&&wr_reg)&&!uncache_reg),
     .wr(REPLACE||REFILL&&wr_reg),
     .wr_way(hitway),
-    .idx(Idx),
+    .idx(index_global),
     .set(REFILL&&wr_reg),
     .D0(Drd[0]),
     .D1(Drd[1])
