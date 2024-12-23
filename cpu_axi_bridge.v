@@ -332,7 +332,7 @@ module cpu_bridge_axi(
         else if(awvalid & awready) begin	// 握手成功
 			wburst_cnt <= awlen;
         end
-		else if(wvalid & wready) begin	// 握手成功
+		else if(wvalid & wready && wlast) begin	// 握手成功
 			wburst_cnt <= wburst_cnt - 1'b1;
         end
 	end
