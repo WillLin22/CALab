@@ -143,7 +143,7 @@ wire inst_invtlb;
 // 新的指令声明放这里
 //-- INE
 wire INE_ID;
-assign INE_ID = ~(inst_sltui | inst_mod_w | inst_blt | inst_ld_hu | inst_or | inst_and | inst_syscall | inst_sltu | inst_add_w | inst_sra_w | inst_mod_wu | inst_csrwr | inst_ori | inst_b | inst_sub_w | inst_bne | inst_div_wu | inst_ld_h | inst_st_w | inst_beq | inst_div_w | inst_csrrd | inst_jirl | inst_andi | inst_xori | inst_srl_w | inst_ld_bu | inst_nor | inst_bltu | inst_mulh_wu | inst_slli_w | inst_mulh_w | inst_mul_w | inst_csrxchg | inst_xor | inst_ld_b | inst_bge | inst_st_b | inst_addi_w | inst_ld_w | inst_bgeu | inst_bl | inst_slti | inst_slt | inst_sll_w | inst_srli_w | inst_ertn | inst_lu12i_w | inst_st_h | inst_srai_w | inst_pcaddu12i | inst_break | inst_rdcntid | inst_rdcntvh_w | inst_rdcntvl_w | inst_tlbsrch | inst_tlbrd | inst_tlbwr | inst_tlbfill | inst_invtlb)
+assign INE_ID = ~(inst_sltui | inst_mod_w | inst_blt | inst_ld_hu | inst_or | inst_and | inst_syscall | inst_sltu | inst_add_w | inst_sra_w | inst_mod_wu | inst_csrwr | inst_ori | inst_b | inst_sub_w | inst_bne | inst_div_wu | inst_ld_h | inst_st_w | inst_beq | inst_div_w | inst_csrrd | inst_jirl | inst_andi | inst_xori | inst_srl_w | inst_ld_bu | inst_nor | inst_bltu | inst_mulh_wu | inst_slli_w | inst_mulh_w | inst_mul_w | inst_csrxchg | inst_xor | inst_ld_b | inst_bge | inst_st_b | inst_addi_w | inst_ld_w | inst_bgeu | inst_bl | inst_slti | inst_slt | inst_sll_w | inst_srli_w | inst_ertn | inst_lu12i_w | inst_st_h | inst_srai_w | inst_pcaddu12i | inst_break | inst_rdcntid | inst_rdcntvh_w | inst_rdcntvl_w | inst_tlbsrch | inst_tlbrd | inst_tlbwr | inst_tlbfill | inst_invtlb | inst_cacop)
 | (inst_invtlb && $unsigned(dest) > 5'd6);//updated:exp18:reserved command exc
 
 //--
@@ -1333,8 +1333,8 @@ wire[31:0] final_result_MEM;
 assign final_result_MEM = res_from_mem_MEM ? mem_result : result_all_MEM;
 
 // cacop
-assign cacop_Icache_en = cacop_code_MEM[2:0] == 3'b000;
-assign cacop_Dcache_en = cacop_code_MEM[2:0] == 3'b001;
+assign cacop_Icache_en = cacop_code_MEM[2:0] == 3'b000 && inst_cacop_MEM;
+assign cacop_Dcache_en = cacop_code_MEM[2:0] == 3'b001 && inst_cacop_MEM;
 assign cacop_code_4_3 = cacop_code_MEM[4:3];
 
 // MEM --> WB CSR 的信号和数据传递
@@ -1645,7 +1645,7 @@ always @(posedge clk) begin
     else if(state_IF[1] & addr_ok_inst)
         state_IF <= 3'b100;
 end
-assign req_inst = state_IF[1]&&data_ok_inst;
+assign req_inst = state_IF[1];
 assign ready_go_IF = state_IF[0] | state_IF[2] & data_ok_inst;
 assign allow_in_IF = handshake_IF_ID;
 
