@@ -242,7 +242,7 @@ module mycpu_top(
         .resetn             (aresetn),
         .clk                (aclk),
         //----------cpu interface------
-        .valid              (inst_sram_req),       //pre-if request valid
+        .valid              (inst_sram_req||cacop_Icache_en),       //pre-if request valid
         .op                 (inst_sram_wr),        //always 0==read
         .index              (inst_virtual_addr[11:4]),
         .tag                (inst_sram_addr[31:12]),//from tlb:inst_sram_addr[31:12]=实地址
@@ -279,7 +279,7 @@ module mycpu_top(
         .resetn             (aresetn),
         .clk                (aclk),
         //----------cpu interface------
-        .valid              (data_sram_req),       //pre-if request valid
+        .valid              (data_sram_req||cacop_Dcache_en),       //pre-if request valid
         .op                 (data_sram_wr),        //always 0==read
         .index              (data_virtual_addr[11:4]),
         .tag                (data_sram_addr[31:12]),//from tlb:inst_sram_addr[31:12]=实地址

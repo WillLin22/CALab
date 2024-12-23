@@ -467,7 +467,6 @@ reg         inst_sram_addr_ack; // 判断指令缓存地址是否已被接受
 
 reg inst_cacop_EX, inst_cacop_MEM;
 reg [4:0]cacop_code_EX, cacop_code_MEM;
-reg [31:0] cacop_va_MEM;
 reg cacop_Icache_en_MEM, cacop_Dcache_en_MEM;
 
 //新的添加的通路声明放这里
@@ -782,7 +781,7 @@ end
 
 
 // exp21
-assign inst_virtual_addr = cacop_Icache_en?cacop_va_MEM:inst_sram_addr; // 传给总线的指令虚拟地址
+assign inst_virtual_addr = cacop_Icache_en?data_sram_addr:inst_sram_addr; // 传给总线的指令虚拟地址
 
 wire [31:0]                 pc_direct; // 直接地址翻译
 wire [31:0]                 pc_dmw0; // 直接映射窗口地址翻译
@@ -806,7 +805,7 @@ assign inst_sram_req = ~ex_IF & req_inst;
 assign inst_sram_we = |inst_sram_wstrb;
 assign inst_sram_size = 2'b10;
 assign inst_sram_wstrb = 4'b0;
-assign inst_sram_addr = pc_physical;
+assign inst_sram_addr = cacop_Icache_en?data_sram_addr:pc_physical;
 assign inst_sram_wdata = 32'b0;
 assign addr_ok_inst = inst_sram_addr_ok;
 assign data_ok_inst = inst_sram_data_ok;
@@ -1260,14 +1259,13 @@ always @(posedge clk) begin
 
         inst_cacop_MEM <= inst_cacop_EX;
         cacop_code_MEM <= cacop_code_EX;
-        cacop_va_MEM <= result_all;
     end
     else if(ertn_flush_WB)
         ertn_flush_MEM <= 1'b0;
     else if(tlb_refetch_WB)
         tlb_refetch_MEM <= 1'b0;
 end
-assign data_virtual_addr = cacop_Dcache_en?cacop_va_MEM:data_sram_addr_MEM;
+assign data_virtual_addr = data_sram_addr_MEM;
 wire ex_EX;
 assign ex_EX = ALE_EX | exc_es_load_invalid_EX | exc_es_store_invalid_EX | exc_es_modify_EX | exc_es_plv_invalid_EX | exc_es_tlb_refill_EX;
 
