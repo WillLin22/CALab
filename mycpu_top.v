@@ -120,6 +120,13 @@ module mycpu_top(
     wire[127:0] dcache_wr_data;
     wire        dcache_wr_rdy;
 
+    //cacop interface
+    wire [ 1:0] cacop_code_4_3;
+    wire        cacop_Icache_en;
+    wire        cacop_Icache_ok;
+    wire        cacop_Dcache_en;
+    wire        cacop_Dcache_ok;
+
     mycpu_core my_core(
         .clk            (aclk),
         .resetn         (aresetn),
@@ -155,7 +162,13 @@ module mycpu_top(
         .debug_wb_rf_wdata  (debug_wb_rf_wdata),
 
         .inst_virtual_addr  (inst_virtual_addr),
-        .data_virtual_addr  (data_virtual_addr)
+        .data_virtual_addr  (data_virtual_addr),
+
+        .cacop_code_4_3     (cacop_code_4_3),
+        .cacop_Icache_en    (cacop_Icache_en),
+        .cacop_Icache_ok    (cacop_Icache_ok),
+        .cacop_Dcache_en    (cacop_Dcache_en),
+        .cacop_Dcache_ok    (cacop_Dcache_ok)
     ); 
 
     cpu_bridge_axi my_bridge_sram_axi(
@@ -255,7 +268,11 @@ module mycpu_top(
         .wr_addr            (icache_wr_addr),       //output，icache 不会使用到
         .wr_wstrb           (icache_wr_strb),       //output，icache 不会使用到
         .wr_data            (icache_wr_data),       //output，icache 不会使用到
-        .wr_rdy             (icache_wr_rdy)         //input, icache不会写sram，置1即可
+        .wr_rdy             (icache_wr_rdy),         //input, icache不会写sram，置1即可
+        .cacop_en           (cacop_Icache_en),
+        .cacop_va           (inst_virtual_addr),
+        .code_4_3           (cacop_code_4_3),
+        .cacop_ok           (cacop_Icache_ok)
     );
 
     cache Dcache (
@@ -288,7 +305,11 @@ module mycpu_top(
         .wr_addr            (dcache_wr_addr),       //output
         .wr_wstrb           (dcache_wr_strb),       //output
         .wr_data            (dcache_wr_data),       //output
-        .wr_rdy             (dcache_wr_rdy)         //input, icache不会写sram，置1即可
+        .wr_rdy             (dcache_wr_rdy),       //input, icache不会写sram，置1即可
+        .cacop_en           (cacop_Dcache_en),
+        .cacop_va           (data_virtual_addr),
+        .code_4_3           (cacop_code_4_3),
+        .cacop_ok           (cacop_Dcache_ok)
     );
 
 

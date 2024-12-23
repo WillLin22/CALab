@@ -40,7 +40,15 @@ module mycpu_core
     // ICACHE interface
     output wire [31:0] inst_virtual_addr,
     // DCACHE interface
-    output wire [31:0] data_virtual_addr
+    output wire [31:0] data_virtual_addr,
+
+    output wire [1:0] cacop_code_4_3,
+    output wire cacop_Icache_en,
+    input wire cacop_Icache_ok,
+
+    output wire cacop_Dcache_en,
+    input wire cacop_Dcache_ok
+
 );
 wire reset = ~resetn;
 
@@ -127,6 +135,8 @@ wire        inst_break;
 wire        inst_rdcntid;
 wire        inst_rdcntvl_w;
 wire        inst_rdcntvh_w;
+
+wire        inst_cacop;
 // exp17
 wire inst_tlbsrch, inst_tlbrd, inst_tlbwr, inst_tlbfill;
 wire inst_invtlb;
@@ -199,7 +209,8 @@ wire req_mem, addr_ok_mem, data_ok_mem;
 //状态机
 reg [2:0]state_IF;
 reg state_ID;
-reg [3:0] state_EX, state_MEM;
+reg [3:0] state_EX; 
+reg [4:0] state_MEM;
 //异步的valid，表明该指令可以产生效果
 wire effectful_IF, effectful_ID, effectful_EX, effectful_MEM, effectful_WB;
 
@@ -454,6 +465,10 @@ wire tlb_refetch_tlb_inst_ID, tlb_refetch_csr_inst_ID;
 reg         inst_buf_valid;  // 判断指令缓存是否有效
 reg         inst_sram_addr_ack; // 判断指令缓存地址是否已被接受
 
+reg inst_cacop_EX, inst_cacop_MEM;
+reg [4:0]cacop_code_EX, cacop_code_MEM;
+reg [31:0] cacop_va_MEM;
+reg cacop_Icache_en_MEM, cacop_Dcache_en_MEM;
 
 //新的添加的通路声明放这里
 //--  inst decode for ID
@@ -547,6 +562,8 @@ assign inst_tlbfill = op_31_26_d[6'h1] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & o
 
 assign inst_invtlb  = op_31_26_d[6'h1] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h13];
 
+assign inst_cacop   = op_31_26_d[6'h1] & op_25_22_d[4'h8];
+
 assign alu_op[ 0] = inst_add_w | inst_addi_w 
                     | inst_ld_w | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu
                     | inst_st_w | inst_st_b | inst_st_h
@@ -571,7 +588,7 @@ wire if_divider;        //EX流水段是否需要等待多周期除法器结束�
 assign if_divider = inst_div_w | inst_div_wu | inst_mod_w | inst_mod_wu;
 
 assign need_ui5   =  inst_slli_w | inst_srli_w | inst_srai_w;
-assign need_si12  =  inst_addi_w | inst_ld_w | inst_st_w| inst_st_b | inst_st_h | inst_st_w | inst_ld_b | inst_ld_bu| inst_ld_h | inst_ld_hu | inst_ld_w | inst_slti | inst_sltui;
+assign need_si12  =  inst_addi_w | inst_ld_w | inst_st_w| inst_st_b | inst_st_h | inst_st_w | inst_ld_b | inst_ld_bu| inst_ld_h | inst_ld_hu | inst_ld_w | inst_slti | inst_sltui | inst_cacop;
 assign need_si16  =  inst_jirl | inst_beq | inst_bne | inst_blt | inst_bge | inst_bltu | inst_bgeu;
 assign need_si20  =  inst_lu12i_w | inst_pcaddu12i;
 assign need_si26  =  inst_b | inst_bl;
@@ -611,12 +628,13 @@ assign src2_is_imm   = inst_slli_w |
                        inst_st_w   | inst_st_b | inst_st_h |
                        inst_lu12i_w|
                        inst_jirl   |
-                       inst_bl     ;
+                       inst_bl     |
+                       inst_cacop;
 
 assign res_from_mem  = inst_ld_w |inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu;
 assign dst_is_r1     = inst_bl;
 assign dst_is_rj     = inst_rdcntid;
-assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b & ~inst_st_b & ~inst_st_h & ~inst_bge & ~inst_bgeu & ~inst_blt & ~inst_bltu & ~inst_ertn & ~inst_tlbsrch &~inst_tlbrd &~inst_tlbwr &~inst_tlbfill &~inst_invtlb;// updated:exp17, TLB 相关均无寄存器写  
+assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b & ~inst_st_b & ~inst_st_h & ~inst_bge & ~inst_bgeu & ~inst_blt & ~inst_bltu & ~inst_ertn & ~inst_tlbsrch &~inst_tlbrd &~inst_tlbwr &~inst_tlbfill &~inst_invtlb &~inst_cacop;// updated:exp17, TLB 相关均无寄存器写  
 assign mem_we        = inst_st_w|inst_st_b|inst_st_h;
 assign dest          = dst_is_r1 ? 5'd1 : 
                       dst_is_rj ? rj : rd;
@@ -764,7 +782,7 @@ end
 
 
 // exp21
-assign inst_virtual_addr = inst_sram_addr; // 传给总线的指令虚拟地址
+assign inst_virtual_addr = cacop_Icache_en?cacop_va_MEM:inst_sram_addr; // 传给总线的指令虚拟地址
 
 wire [31:0]                 pc_direct; // 直接地址翻译
 wire [31:0]                 pc_dmw0; // 直接映射窗口地址翻译
@@ -967,6 +985,9 @@ always @(posedge clk) begin
         we_EX <= 1'b0;
         wop_EX <= 4'b0;
         invtlb_EX <= 1'b0;
+
+        inst_cacop_EX <= 1'b0;
+        cacop_code_EX <= 5'b0;
     end
     else if(handshake_ID_EX)begin
         alu_src1_EX <= alu_src1;
@@ -1017,6 +1038,9 @@ always @(posedge clk) begin
         we_EX <= we_ID;
         wop_EX <= wop_ID;
         invtlb_EX <= inst_invtlb;
+
+        inst_cacop_EX <= inst_cacop;
+        cacop_code_EX <= inst_ID[4:0];
     end
     else if(ertn_flush_WB)
         ertn_flush_EX <= 1'b0;
@@ -1175,6 +1199,9 @@ always @(posedge clk) begin
         exc_es_modify_MEM <= 1'b0;
         tlb_refetch_MEM <= 1'b0;
         data_virtual_addr_MEM <= 32'b0;
+
+        inst_cacop_MEM <= 1'b0;
+        cacop_code_MEM <= 5'b0;
     end
     else if(handshake_EX_MEM)begin
         res_from_mem_MEM <= res_from_mem_EX;
@@ -1230,13 +1257,17 @@ always @(posedge clk) begin
         exc_es_modify_MEM <= exc_es_modify_EX;
         tlb_refetch_MEM <= tlb_refetch_EX;
         data_virtual_addr_MEM <= data_virtual_addr_EX;
+
+        inst_cacop_MEM <= inst_cacop_EX;
+        cacop_code_MEM <= cacop_code_EX;
+        cacop_va_MEM <= result_all;
     end
     else if(ertn_flush_WB)
         ertn_flush_MEM <= 1'b0;
     else if(tlb_refetch_WB)
         tlb_refetch_MEM <= 1'b0;
 end
-assign data_virtual_addr = data_sram_addr_MEM;
+assign data_virtual_addr = cacop_Dcache_en?cacop_va_MEM:data_sram_addr_MEM;
 wire ex_EX;
 assign ex_EX = ALE_EX | exc_es_load_invalid_EX | exc_es_store_invalid_EX | exc_es_modify_EX | exc_es_plv_invalid_EX | exc_es_tlb_refill_EX;
 
@@ -1302,6 +1333,11 @@ assign data_sram_wdata_EX = ({32{mem_word_EX}}&mem_wdata_EX)
                         |({32{mem_byte_EX}}&{4{mem_wdata_EX[7:0]}});//! 在内存将要写入的位置连接上正确的数据
 wire[31:0] final_result_MEM;
 assign final_result_MEM = res_from_mem_MEM ? mem_result : result_all_MEM;
+
+// cacop
+assign cacop_Icache_en = cacop_code_MEM[2:0] == 3'b000;
+assign cacop_Dcache_en = cacop_code_MEM[2:0] == 3'b001;
+assign cacop_code_4_3 = cacop_code_MEM[4:3];
 
 // MEM --> WB CSR 的信号和数据传递
 
@@ -1655,18 +1691,22 @@ assign unsigned_divisor_tvalid = state_EX[1] & (inst_div_wu_EX | inst_mod_wu_EX)
 //MEM
 always @(posedge clk) begin
     if(reset)
-        state_MEM <= 4'b0001;
+        state_MEM <= 5'b00001;
+    else if(handshake_EX_MEM & inst_cacop_EX&effectful_EX)
+        state_MEM <= 5'b10000;
+    else if(state_MEM[4] & (cacop_Icache_ok||cacop_Dcache_ok))
+        state_MEM <= 5'b01000;
     else if(state_MEM[0] & handshake_EX_MEM & (data_sram_en_EX & effectful_EX) |
             state_MEM[3] & handshake_EX_MEM & handshake_MEM_WB & (data_sram_en_EX & effectful_EX))
-        state_MEM <= 4'b0010;
+        state_MEM <= 5'b00010;
     else if(state_MEM[1] & addr_ok_mem)
-        state_MEM <= 4'b0100;
+        state_MEM <= 5'b00100;
     else if(state_MEM[2] & data_ok_mem | 
             state_MEM[0] & handshake_EX_MEM &(~data_sram_en_EX | ~effectful_EX) |
             state_MEM[3] & handshake_EX_MEM & handshake_MEM_WB &(~data_sram_en_EX | ~effectful_EX))
-        state_MEM <= 4'b1000;
+        state_MEM <= 5'b01000;
     else if(state_MEM[3] & handshake_MEM_WB & ~handshake_EX_MEM)
-        state_MEM <= 4'b0001;
+        state_MEM <= 5'b00001;
 end
 assign allow_in_MEM = state_MEM[0] | state_MEM[3] & handshake_MEM_WB;
 assign ready_go_MEM = state_MEM[3];
