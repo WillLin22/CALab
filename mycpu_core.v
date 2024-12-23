@@ -656,8 +656,8 @@ assign addr_ex_dmw1 = {tlb_dmw1_pseg, addr_ex_direct[28:0]};
 assign addr_ex_tlb = {tlb_out_s1_ppn, addr_ex_direct[11:0]};
 
 assign ex_trans_direct = crmd_da & ~crmd_pg;
-assign ex_trans_dmw0 = ((crmd_plv == 0 && tlb_dmw0_plv0) || (crmd_plv == 3 && tlb_dmw0_plv3)) && (crmd_datm == tlb_dmw0_mat) && (addr_ex_direct[31:29] == tlb_dmw0_vseg);
-assign ex_trans_dmw1 = ((crmd_plv == 0 && tlb_dmw1_plv0) || (crmd_plv == 3 && tlb_dmw1_plv3)) && (crmd_datm == tlb_dmw1_mat) && (addr_ex_direct[31:29] == tlb_dmw1_vseg);
+assign ex_trans_dmw0 = ((crmd_plv == 0 && tlb_dmw0_plv0) || (crmd_plv == 3 && tlb_dmw0_plv3))  && (addr_ex_direct[31:29] == tlb_dmw0_vseg);
+assign ex_trans_dmw1 = ((crmd_plv == 0 && tlb_dmw1_plv0) || (crmd_plv == 3 && tlb_dmw1_plv3))  && (addr_ex_direct[31:29] == tlb_dmw1_vseg);
 assign ex_trans_tlb = ~crmd_da & crmd_pg & ~ex_trans_dmw0 & ~ex_trans_dmw1;
 assign addr_ex_physical = ex_trans_direct ? addr_ex_direct 
                         : (ex_trans_dmw0 ? addr_ex_dmw0 
@@ -785,6 +785,7 @@ assign inst_virtual_addr = cacop_Icache_en?data_sram_addr:inst_sram_addr; // 传
 
 wire [31:0]                 pc_direct; // 直接地址翻译
 wire [31:0]                 pc_dmw0; // 直接映射窗口地址翻译
+wire [31:0]                 pc_dmw1; // 直接映射窗口地址翻译
 wire [31:0]                 pc_tlb;    // tlb地址翻译
 wire [31:0]                 pc_physical; // 物理地址
 assign pc_direct = pc;
