@@ -640,7 +640,7 @@ assign dest          = dst_is_r1 ? 5'd1 :
 
 
 // EX exception --exp19
-assign exc_es_tlb_refill_EX = ex_trans_tlb & (res_from_mem_EX | mem_we_EX) & ~tlb_out_s1_found; // 当访存操作的虚地址在 TLB 中查找没有匹配项时，触发该例外，通知系统软件进行 TLB 重填工作
+assign exc_es_tlb_refill_EX = ex_trans_tlb & (res_from_mem_EX | mem_we_EX | (inst_cacop_EX && cacop_code_EX[4:3]==2'b10)) & ~tlb_out_s1_found; // 当访存操作的虚地址在 TLB 中查找没有匹配项时，触发该例外，通知系统软件进行 TLB 重填工作
 assign exc_es_load_invalid_EX = ex_trans_tlb & res_from_mem_EX & tlb_out_s1_found & ~tlb_out_s1_v; // load 操作的虚地址在 TLB 中找到了匹配项但是匹配页表项的 V=0，将触发该例外。
 assign exc_es_store_invalid_EX = ex_trans_tlb & mem_we_EX & tlb_out_s1_found & ~tlb_out_s1_v; // store 操作的虚地址在 TLB 中找到了匹配项但是匹配页表项的 V=0，将触发该例外。
 assign exc_es_plv_invalid_EX = ex_trans_tlb & (res_from_mem_EX | mem_we_EX) & tlb_out_s1_found & tlb_out_s1_v & (crmd_plv > tlb_out_s1_plv); // load 操作的虚地址在 TLB 中找到了匹配项，且 V=1，但是特权等级不合规，将触发该例外。
@@ -1336,6 +1336,9 @@ assign final_result_MEM = res_from_mem_MEM ? mem_result : result_all_MEM;
 assign cacop_Icache_en = cacop_code_MEM[2:0] == 3'b000 && inst_cacop_MEM;
 assign cacop_Dcache_en = cacop_code_MEM[2:0] == 3'b001 && inst_cacop_MEM;
 assign cacop_code_4_3 = cacop_code_MEM[4:3];
+
+// wire exc_tlb_refill_cacop;
+// assign exc_tlb_refill_cacop = ((cacop_code_4_3 == 2'b10&& !tlb_out_s1_found) && inst_cacop_MEM);
 
 // MEM --> WB CSR 的信号和数据传递
 
