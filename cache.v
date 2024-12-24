@@ -144,7 +144,7 @@ HitGen hitgen(
     .hit(hit),
     .way(hitway),
     .cacop_way_en(cacop_use_va),
-    .cacop_way(cacop_va[0]),
+    .cacop_way(Cacop_va[0]),
     .error(hiterror)
 );
 //MISS
