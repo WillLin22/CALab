@@ -398,7 +398,10 @@ assign csr_rvalue = {32{csr_num==`CSR_CRMD}} & csr_crmd_rvalue
                     | {32{csr_num==`CSR_TLBELO0}} & csr_tlbelo0_rvalue
                     | {32{csr_num==`CSR_TLBELO1}} & csr_tlbelo1_rvalue
                     | {32{csr_num==`CSR_ASID}} & csr_asid_rvalue
-                    | {32{csr_num==`CSR_TLBRENTRY}} & csr_tlbrentry_rvalue;
+                    | {32{csr_num==`CSR_TLBRENTRY}} & csr_tlbrentry_rvalue
+                    | {32{csr_num==`CSR_DMW0}} & csr_dmw0_rvalue
+                    | {32{csr_num==`CSR_DMW1}} & csr_dmw1_rvalue;
+
 
 assign has_int = (|(csr_estat_is[11:0] & csr_ecfg_lie[11:0])) & csr_crmd_ie; // 送往ID级的中断有效信号 中断的使能情况分两个层次：低层次是与各中断一一对应的局部中断使能，通过 ECFG 控制寄存器的 LIE（Local Interrupt Enable）域的 11, 9..0 位来控制；高层次是全局中断使能，通过 CRMD 控制状态寄存器的 IE（Interrupt Enable）位来控制。
 assign ex_entry = tlb_refill ? csr_tlbrentry_rvalue :csr_eentey_rvalue; // 送往pre-IF级的异常处理入口地址
@@ -611,10 +614,12 @@ assign tlb_r_TLBR = csr_estat_ecode == 6'h3F;
 //复位：所有实现的CSR.DMW中的PLV0、PLV3均为0；
 
 // DMW0 直接映射配置窗口0 见讲义5.2.1节
+wire[31:0] csr_dmw0_rvalue;
 reg         dmw0_plv0, dmw0_plv3;
 reg [1:0]   dmw0_mat;
 reg [2:0]   dmw0_pseg;
 reg [2:0]   dmw0_vseg;
+assign csr_dmw0_rvalue = {dmw0_vseg, 1'b0, dmw0_pseg, 19'b0, dmw0_mat, dmw0_plv3, 2'b0, dmw0_plv0};
 
 always @(posedge clk) begin
     if(rst) begin
@@ -639,10 +644,12 @@ assign tlb_dmw0_pseg = dmw0_pseg;
 assign tlb_dmw0_vseg = dmw0_vseg;
 
 // DMW1 直接映射配置窗口1 见讲义5.2.1节
+wire[31:0] csr_dmw1_rvalue;
 reg         dmw1_plv0, dmw1_plv3;
 reg [1:0]   dmw1_mat;
 reg [2:0]   dmw1_pseg;
 reg [2:0]   dmw1_vseg;
+assign csr_dmw1_rvalue = {dmw1_vseg, 1'b0, dmw1_pseg, 19'b0, dmw1_mat, dmw1_plv3, 2'b0, dmw1_plv0};
 
 always @(posedge clk) begin
     if(rst) begin

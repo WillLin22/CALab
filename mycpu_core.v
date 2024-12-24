@@ -640,7 +640,7 @@ assign dest          = dst_is_r1 ? 5'd1 :
 
 
 // EX exception --exp19
-assign exc_es_tlb_refill_EX = ex_trans_tlb & (res_from_mem_EX | mem_we_EX) & ~tlb_out_s1_found; // 当访存操作的虚地址在 TLB 中查找没有匹配项时，触发该例外，通知系统软件进行 TLB 重填工作
+assign exc_es_tlb_refill_EX = ex_trans_tlb & (res_from_mem_EX | mem_we_EX | (inst_cacop_EX && cacop_code_EX[4:3]==2'b10)) & ~tlb_out_s1_found; // 当访存操作的虚地址在 TLB 中查找没有匹配项时，触发该例外，通知系统软件进行 TLB 重填工作
 assign exc_es_load_invalid_EX = ex_trans_tlb & res_from_mem_EX & tlb_out_s1_found & ~tlb_out_s1_v; // load 操作的虚地址在 TLB 中找到了匹配项但是匹配页表项的 V=0，将触发该例外。
 assign exc_es_store_invalid_EX = ex_trans_tlb & mem_we_EX & tlb_out_s1_found & ~tlb_out_s1_v; // store 操作的虚地址在 TLB 中找到了匹配项但是匹配页表项的 V=0，将触发该例外。
 assign exc_es_plv_invalid_EX = ex_trans_tlb & (res_from_mem_EX | mem_we_EX) & tlb_out_s1_found & tlb_out_s1_v & (crmd_plv > tlb_out_s1_plv); // load 操作的虚地址在 TLB 中找到了匹配项，且 V=1，但是特权等级不合规，将触发该例外。
@@ -656,8 +656,8 @@ assign addr_ex_dmw1 = {tlb_dmw1_pseg, addr_ex_direct[28:0]};
 assign addr_ex_tlb = {tlb_out_s1_ppn, addr_ex_direct[11:0]};
 
 assign ex_trans_direct = crmd_da & ~crmd_pg;
-assign ex_trans_dmw0 = ((crmd_plv == 0 && tlb_dmw0_plv0) || (crmd_plv == 3 && tlb_dmw0_plv3)) && (crmd_datm == tlb_dmw0_mat) && (addr_ex_direct[31:29] == tlb_dmw0_vseg);
-assign ex_trans_dmw1 = ((crmd_plv == 0 && tlb_dmw1_plv0) || (crmd_plv == 3 && tlb_dmw1_plv3)) && (crmd_datm == tlb_dmw1_mat) && (addr_ex_direct[31:29] == tlb_dmw1_vseg);
+assign ex_trans_dmw0 = ((crmd_plv == 0 && tlb_dmw0_plv0) || (crmd_plv == 3 && tlb_dmw0_plv3))  && (addr_ex_direct[31:29] == tlb_dmw0_vseg);
+assign ex_trans_dmw1 = ((crmd_plv == 0 && tlb_dmw1_plv0) || (crmd_plv == 3 && tlb_dmw1_plv3))  && (addr_ex_direct[31:29] == tlb_dmw1_vseg);
 assign ex_trans_tlb = ~crmd_da & crmd_pg & ~ex_trans_dmw0 & ~ex_trans_dmw1;
 assign addr_ex_physical = ex_trans_direct ? addr_ex_direct 
                         : (ex_trans_dmw0 ? addr_ex_dmw0 
@@ -665,7 +665,7 @@ assign addr_ex_physical = ex_trans_direct ? addr_ex_direct
                         : (addr_ex_tlb)));//ex_trans_tlb 
 
 // add dcache_uncache signal --exp22
-assign if_dcache_uncache = 0;// ex_trans_direct ? ~crmd_datm : (ex_trans_dmw0 ? ~tlb_dmw0_mat : (ex_trans_dmw1 ? ~tlb_dmw1_mat : (ex_trans_tlb ? tlb_out_s0_mat : 1'b0)));
+assign if_dcache_uncache = ex_trans_direct ? ~crmd_datm : (ex_trans_dmw0 ? ~tlb_dmw0_mat : (ex_trans_dmw1 ? ~tlb_dmw1_mat : (ex_trans_tlb ? tlb_out_s0_mat : 1'b0)));
 
 assign  mem_wdata_ID = rkd_value;
 
@@ -785,6 +785,7 @@ assign inst_virtual_addr = cacop_Icache_en?data_sram_addr:inst_sram_addr; // 传
 
 wire [31:0]                 pc_direct; // 直接地址翻译
 wire [31:0]                 pc_dmw0; // 直接映射窗口地址翻译
+wire [31:0]                 pc_dmw1; // 直接映射窗口地址翻译
 wire [31:0]                 pc_tlb;    // tlb地址翻译
 wire [31:0]                 pc_physical; // 物理地址
 assign pc_direct = pc;
@@ -828,7 +829,7 @@ assign exc_fs_fetch_invalid_IF = if_trans_tlb & tlb_out_s0_found & ~tlb_out_s0_v
 assign exc_fs_plv_invalid_IF = if_trans_tlb & tlb_out_s0_found & tlb_out_s0_v & (crmd_plv > tlb_out_s0_plv); // 访存操作的虚地址在 TLB 中找到了匹配且 V=1 的项，但是访问的特权等级不合规，将触发该例外。特权等级不合规体现为，该页表项的 CSR.CRMD.PLV 值大于页表项中的 PLV。
 
 // add icache_uncache signal -- exp22
-assign if_icache_uncache = 0;// if_trans_direct ? ~crmd_datf : (if_trans_dmw0 ? ~tlb_dmw0_mat : (if_trans_dmw1 ? ~tlb_dmw1_mat : (if_trans_tlb ? tlb_out_s0_mat : 1'b0)));
+assign if_icache_uncache = if_trans_direct ? ~crmd_datf : (if_trans_dmw0 ? ~tlb_dmw0_mat : (if_trans_dmw1 ? ~tlb_dmw1_mat : (if_trans_tlb ? tlb_out_s0_mat : 1'b0)));
 
 //-- IF stage
 always @(posedge clk) begin
@@ -1336,6 +1337,9 @@ assign final_result_MEM = res_from_mem_MEM ? mem_result : result_all_MEM;
 assign cacop_Icache_en = cacop_code_MEM[2:0] == 3'b000 && inst_cacop_MEM;
 assign cacop_Dcache_en = cacop_code_MEM[2:0] == 3'b001 && inst_cacop_MEM;
 assign cacop_code_4_3 = cacop_code_MEM[4:3];
+
+// wire exc_tlb_refill_cacop;
+// assign exc_tlb_refill_cacop = ((cacop_code_4_3 == 2'b10&& !tlb_out_s1_found) && inst_cacop_MEM);
 
 // MEM --> WB CSR 的信号和数据传递
 
