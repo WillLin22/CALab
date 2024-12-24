@@ -109,10 +109,10 @@ wire [`INDEXLEN-1:0] index_global       = Cacop_en ? cacop_idx : Idx;
 wire [`TAGLEN-1:0] tag_global           = Tag;
 
 // cacop writeback
-wire cacop_wb = cacop_en_reg && hit && Drd[hitway] && Code_4_3 != 2'b00;
+wire cacop_wb = Cacop_en && hit && Drd[hitway] && Code_4_3 != 2'b00;
 // cache ready
-wire ready = IDLE||LOOKUP&&!wr_reg&&hit&&!uncache_reg&&!cacop_en_reg||REFILL 
-            ||/* LOOKUP&&!cacop_wb&&cacop_en_reg|| */MISS&&misswr_ok&&cacop_en_reg;
+wire ready = IDLE||LOOKUP&&!wr_reg&&hit&&!uncache_reg&&!Cacop_en||REFILL 
+            ||/* LOOKUP&&!cacop_wb&&cacop_en_reg|| */MISS&&misswr_ok&&Cacop_en;
 
 assign Idx = out_addrok ? in_idx : pa_reg[`VAIDXR];
 assign Offset = out_addrok ? in_offset : pa_reg[`VAOFFR];
@@ -241,8 +241,8 @@ always @(posedge clk) begin
         tagv_reg[0] <= tagvrd[0];
         tagv_reg[1] <= tagvrd[1];
         datawr_reg  <= datard[hitway];
-        miss_rding  <= (!hit&&!uncache_reg || uncache_reg&&!wr_reg)&&!cacop_en_reg;
-        miss_wring  <= cacop_en_reg?cacop_wb:(!hit&&Drd[hitway]&&!uncache_reg || uncache_reg&&wr_reg);
+        miss_rding  <= (!hit&&!uncache_reg || uncache_reg&&!wr_reg)&&!Cacop_en;
+        miss_wring  <= Cacop_en?cacop_wb:(!hit&&Drd[hitway]&&!uncache_reg || uncache_reg&&wr_reg);
     end
     else if(MISS)begin
         if(missrd_ok)
@@ -265,28 +265,28 @@ always @(posedge clk) begin
         state <= 5'b00001;
     else if(out_addrok||cacop_ok)
         state <= 5'b00010;
-    else if(LOOKUP && hit && wr_reg&&!cacop_en_reg||REPLACE)
+    else if(LOOKUP && hit && wr_reg&&!Cacop_en||REPLACE)
         state <= 5'b10000;
-    else if(LOOKUP && !hit && !cacop_en_reg|| cacop_wb)
+    else if(LOOKUP && !hit && !Cacop_en|| cacop_wb)
         state <= 5'b00100;
     else if(MISS &&(!miss_rding||missrd_ok)&&(!miss_wring||misswr_ok))
-        if(cacop_en_reg)
+        if(Cacop_en)
             state <= 5'b00001;
         else 
             state <= 5'b01000;
-    else if(REFILL||LOOKUP&&hit&&!wr_reg&&!cacop_en_reg||LOOKUP&&(Code_4_3==2'b00||!hit)&&cacop_en_reg)
+    else if(REFILL||LOOKUP&&hit&&!wr_reg&&!Cacop_en||LOOKUP&&(Code_4_3==2'b00||!hit)&&Cacop_en)
         state <= 5'b00001;
 end
 
 TagVWrapper tagvwrapper(
     .clk(clk),
-    .en(out_addrok||cacop_ok||(REPLACE)&&!uncache_reg||LOOKUP&&cacop_en_reg&&hit),
+    .en(out_addrok||cacop_ok||(REPLACE)&&!uncache_reg||LOOKUP&&Cacop_en&&hit),
     .idx(index_global),
     .tagvr1(tagvrd[0]),
     .tagvr2(tagvrd[1]),
-    .wr(REPLACE||LOOKUP&&cacop_en_reg&&hit),
+    .wr(REPLACE||LOOKUP&&Cacop_en&&hit),
     .wr_way(hitway),
-    .Tag(cacop_en_reg?`TAGLEN'b0:Tag)
+    .Tag(Cacop_en?`TAGLEN'b0:Tag)
 );
 DataWrapper datawrapper(
     .clk(clk),
