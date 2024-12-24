@@ -240,7 +240,7 @@ always @(posedge clk) begin
         tagv_reg[0] <= tagvrd[0];
         tagv_reg[1] <= tagvrd[1];
         datawr_reg  <= datard[hitway];
-        miss_rding  <= !hit&&!uncache_reg || uncache_reg&&!wr_reg;
+        miss_rding  <= (!hit&&!uncache_reg || uncache_reg&&!wr_reg)&&!cacop_en_reg;
         miss_wring  <= cacop_en_reg?cacop_wb:(!hit&&Drd[hitway]&&!uncache_reg || uncache_reg&&wr_reg);
     end
     else if(MISS)begin
