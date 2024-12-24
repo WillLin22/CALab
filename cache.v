@@ -267,14 +267,14 @@ always @(posedge clk) begin
         state <= 5'b00010;
     else if(LOOKUP && hit && wr_reg&&!Cacop_en||REPLACE)
         state <= 5'b10000;
-    else if(LOOKUP && !hit && !Cacop_en|| cacop_wb)
+    else if(LOOKUP && !hit && !Cacop_en|| LOOKUP&&cacop_wb)
         state <= 5'b00100;
     else if(MISS &&(!miss_rding||missrd_ok)&&(!miss_wring||misswr_ok))
         if(Cacop_en)
             state <= 5'b00001;
         else 
             state <= 5'b01000;
-    else if(REFILL||LOOKUP&&hit&&!wr_reg&&!Cacop_en||LOOKUP&&(Code_4_3==2'b00||!hit)&&Cacop_en)
+    else if(REFILL||LOOKUP&&hit&&!wr_reg&&!Cacop_en||LOOKUP&&!cacop_wb&&Cacop_en)
         state <= 5'b00001;
 end
 
