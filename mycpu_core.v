@@ -1334,8 +1334,8 @@ wire[31:0] final_result_MEM;
 assign final_result_MEM = res_from_mem_MEM ? mem_result : result_all_MEM;
 
 // cacop
-assign cacop_Icache_en = cacop_code_MEM[2:0] == 3'b000 && inst_cacop_MEM;
-assign cacop_Dcache_en = cacop_code_MEM[2:0] == 3'b001 && inst_cacop_MEM;
+assign cacop_Icache_en = (cacop_code_MEM[2:0] == 3'b000 && inst_cacop_MEM)&&state_MEM[4];
+assign cacop_Dcache_en = (cacop_code_MEM[2:0] == 3'b001 && inst_cacop_MEM)&&state_MEM[4];
 assign cacop_code_4_3 = cacop_code_MEM[4:3];
 
 // wire exc_tlb_refill_cacop;
