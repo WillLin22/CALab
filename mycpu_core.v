@@ -665,7 +665,8 @@ assign addr_ex_physical = ex_trans_direct ? addr_ex_direct
                         : (addr_ex_tlb)));//ex_trans_tlb 
 
 // add dcache_uncache signal --exp22
-assign if_dcache_uncache = ex_trans_direct ? ~crmd_datm[0] : (ex_trans_dmw0 ? ~tlb_dmw0_mat[0] : (ex_trans_dmw1 ? ~tlb_dmw1_mat[0] : (ex_trans_tlb ? ~tlb_out_s1_mat[0] : 1'b1)));
+wire if_dcache_uncache_EX;
+assign if_dcache_uncache_EX = ex_trans_direct ? ~crmd_datm[0] : (ex_trans_dmw0 ? ~tlb_dmw0_mat[0] : (ex_trans_dmw1 ? ~tlb_dmw1_mat[0] : (ex_trans_tlb ? ~tlb_out_s1_mat[0] : 1'b1)));
 
 assign  mem_wdata_ID = rkd_value;
 
@@ -719,6 +720,7 @@ assign csr_wmask_ID     = inst_csrxchg ? rj_value : {32{inst_csrwr}};  //mask <-
 //exp18
 assign wop_ID = {inst_tlbfill, inst_tlbwr, inst_tlbrd, inst_tlbsrch};
 assign we_ID = |wop_ID;
+reg if_dcache_uncache_MEM;
 
 //--  Waterflow
 //IF, ID, EX, MEM, WB
@@ -1202,6 +1204,8 @@ always @(posedge clk) begin
 
         inst_cacop_MEM <= 1'b0;
         cacop_code_MEM <= 5'b0;
+
+        if_dcache_uncache_MEM <= 1'b0;
     end
     else if(handshake_EX_MEM)begin
         res_from_mem_MEM <= res_from_mem_EX;
@@ -1260,12 +1264,15 @@ always @(posedge clk) begin
 
         inst_cacop_MEM <= inst_cacop_EX;
         cacop_code_MEM <= cacop_code_EX;
+
+        if_dcache_uncache_MEM <= if_dcache_uncache_EX;
     end
     else if(ertn_flush_WB)
         ertn_flush_MEM <= 1'b0;
     else if(tlb_refetch_WB)
         tlb_refetch_MEM <= 1'b0;
 end
+assign if_dcache_uncache = if_dcache_uncache_MEM;
 assign data_virtual_addr = data_sram_addr_MEM;
 wire ex_EX;
 assign ex_EX = ALE_EX | exc_es_load_invalid_EX | exc_es_store_invalid_EX | exc_es_modify_EX | exc_es_plv_invalid_EX | exc_es_tlb_refill_EX;
