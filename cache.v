@@ -111,7 +111,7 @@ wire [`TAGLEN-1:0] tag_global           = Tag;
 wire cacop_wb = cacop_en_reg && hit && Drd[hitway] && Code_4_3 != 2'b00;
 // cache ready
 wire ready = IDLE||LOOKUP&&!wr_reg&&hit&&!uncache_reg&&!cacop_en_reg||REFILL 
-            ||LOOKUP&&!cacop_wb&&cacop_en_reg||MISS&&misswr_ok&&cacop_en_reg;
+            ||/* LOOKUP&&!cacop_wb&&cacop_en_reg|| */MISS&&misswr_ok&&cacop_en_reg;
 
 assign Idx = out_addrok ? in_idx : pa_reg[`VAIDXR];
 assign Offset = out_addrok ? in_offset : pa_reg[`VAOFFR];
