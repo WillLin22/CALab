@@ -94,9 +94,10 @@ assign tagv[0] = tagv1;
 assign tagv[1] = tagv2;
 wire [1:0] hitway;
 wire way_e, way_gen;
+wire [1:0] cacop_way_d = {cacop_way, !cacop_way};
 genvar i;
 generate for(i = 0;i < `WAY; i=i+1) begin : hitway_gen
-    assign hitway[i] = cacop_way_en?cacop_way:(tagv[i][`TAGR] == Tag && tagv[i][`VR] == 1);
+    assign hitway[i] = cacop_way_en?cacop_way_d[i]:(tagv[i][`TAGR] == Tag && tagv[i][`VR] == 1);
 end
 endgenerate
 assign hit = (|hitway)&&!uncache;
